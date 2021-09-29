@@ -63,20 +63,21 @@ def process_save_email_2_csv():
 
 
 # Main function in outlook_trigger
-outlook = Dispatch("Outlook.Application").GetNamespace("MAPI")
-inbox = outlook.GetDefaultFolder("6")
-msgs = inbox.Items
+def outlook_trigger():
+    outlook = Dispatch("Outlook.Application").GetNamespace("MAPI")
+    inbox = outlook.GetDefaultFolder("6")
+    msgs = inbox.Items
     
-# Date Range from last three days
-d = (datetime.date.today() - datetime.timedelta (days=5)).strftime("%d-%m-%y")
+    # Date Range from last three days
+    d = (datetime.date.today() - datetime.timedelta (days=5)).strftime("%d-%m-%y")
     
-# Search in inbox for last three days
-msgs = msgs.Restrict("[ReceivedTime] >= '" + d +"'")
+    # Search in inbox for last three days
+    msgs = msgs.Restrict("[ReceivedTime] >= '" + d +"'")
     
-if msgs:
-    # Get all the previous filename save (already process emails)
-    filename_list = os.listdir(AttachPath)
-    search_all_mail(filename_list, msgs)
+    if msgs:
+        # Get all the previous filename save (already process emails)
+        filename_list = os.listdir(AttachPath)
+        search_all_mail(filename_list, msgs)
         
-    if MsgToMove:
-        process_save_email_2_csv()
+        if MsgToMove:
+            process_save_email_2_csv()
