@@ -37,7 +37,6 @@ BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__Arriva
                       WHERE BK.Booking_ID_Number__c = " + BK_ID_no, conn)
 BK_tmp['OwnerId'].replace(user, inplace=True)
 BK_ID = BK_tmp.iloc[0]['Id']
-print(BK_ID)
 
 # extract roomnight_by_day info
 RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'MM/dd/yyyy') AS PatternDate, \
@@ -58,7 +57,6 @@ Room_no['variable'].replace('Room', '', inplace=True, regex=True)
 Room_rate = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Rate1', 'Rate2', 'Rate3', 'Rate4']]
 Room_rate = pd.melt(Room_rate, id_vars=['Property', 'Room Type', 'Pattern Date'], value_name='Rate')
 Room_rate['variable'].replace('Rate', '', inplace=True, regex=True)
-convert_to_excel(Room_rate, 'Rate')
 # Join Room Night and Room Rate
 RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'variable'])
 
@@ -73,10 +71,12 @@ Event_tmp = pd.read_sql("SELECT ET.Name, FR.Name, ET.nihrm__EventClassificationN
                          INNER JOIN dbo.nihrm__FunctionRoom__c AS FR \
                              ON ET.nihrm__FunctionRoom__c = FR.Id \
                          WHERE ET.nihrm__Booking__c = '" + BK_ID + "'", conn)
-Event_tmp.columns = ['Event name', 'Function Space', 'Event Classification', 'Start', '']
+Event_tmp.columns = ['Event name', 'Function Space', 'Event Classification', 'Start', 'Agreed', 'Food Check', 'Food Factor', 'Outlet Check', 'Outlet Factor', 'Beverage Check', 'Beverage Factor', 'Rental Revenue', 'AV Revenue']
 EventT = 'EventT'
 convert_to_excel(Event_tmp, EventT)
 
+
+Event_tmp
 
 # TODO: main function for extract_sqlserver_data
 # def extract_sqlserver_data(data):
