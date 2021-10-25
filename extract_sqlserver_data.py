@@ -32,11 +32,14 @@ user = user.set_index('Id')['Name'].to_dict()
 
 
 # extract booking info
-BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'MM/dd/yyyy') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'MM/dd/yyyy') AS DepartureDate, BK.nihrm__CommissionPercentage__c \
+BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'yyyy/MM/dd') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'yyyy/MM/dd') AS DepartureDate, BK.nihrm__CommissionPercentage__c, BK.nihrm__Property__c \
                       FROM dbo.nihrm__Booking__c AS BK \
                       WHERE BK.Booking_ID_Number__c = " + BK_ID_no, conn)
 BK_tmp['OwnerId'].replace(user, inplace=True)
 BK_ID = BK_tmp.iloc[0]['Id']
+
+
+
 
 # extract roomnight_by_day info
 RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'MM/dd/yyyy') AS PatternDate, \
