@@ -62,6 +62,15 @@ excel = win32.DispatchEx("Excel.Application")
 wb = excel.Workbooks.Open(save_path + 'Booking Proforma Template_unprotected.xlsx', None, True)
 
 
+# Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax
+def BQT_meal_table(meal_tmp):
+    meal_tmp['Total Revenue'] = meal_tmp['Food Revenue'] + meal_tmp['Outlet Revenue']
+    meal_tmp = meal_tmp.groupby('Start')[['Agreed', 'Total Revenue']].sum()
+    meal_tmp['Revenue per pax'] = meal_tmp['Total Revenue'] / meal_tmp['Agreed']
+    meal_tmp = meal_tmp[['Revenue per pax', 'Agreed']].T
+    return meal_tmp
+
+
 # Sync data to Proforma Worksheet
 ws_Proforma = wb.Worksheets('Proforma')
 
@@ -82,6 +91,32 @@ ws_BQT = wb.Worksheets('B. BQT')
 ws_BQT.Range("B7").Value = BK_tmp.iloc[0]['nihrm__FoodBeverageMinimum__c']
 # TODO: Rebate
 
+
+# Sync data to BQT Meal Worksheet
+ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
+# exclude all package event
+Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
+# Breakfast table
+breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
+if breakfast.empty is False:
+    breakfast = BQT_meal_table(breakfast)
+    ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1])).Value = breakfast.values
+# Lunch table
+lunch = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Lunch')]
+if lunch.empty is False:
+    lunch = BQT_meal_table(lunch)
+    ws_BQT_meal.Range(ws_BQT_meal.Cells(22,2), ws_BQT_meal.Cells(23, 2 + lunch.shape[1])).Value = lunch.values
+# Dinner table
+dinner = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Dinner')]
+if dinner.empty is False:
+    dinner = BQT_meal_table(dinner)
+    ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1])).Value = dinner.values
+# Beverage table
+beverage = Event_wo_package
+if beverage.empty is False:
+# TODO
+#    dinner = BQT_meal_table(dinner)
+#    ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + dinner.shape[1])).Value = dinner.values
 
 
 # Sync data to Entertainment Worksheet
@@ -110,32 +145,9 @@ ws_CE.Range("B6").Value = Event_tmp['AV Revenue'].sum()
 ws_CE.Range("B4").Value = Event_tmp['Rental Revenue'].sum() - arena - venetian_theatre - parisian_theatre - hall
 
 
-def meal_type_table(meal_tmp):
-    meal_tmp['Total Revenue'] = meal_tmp['Food Revenue'] + meal_tmp['Outlet Revenue']
-    meal_tmp = meal_tmp.groupby('Start')[['Agreed', 'Total Revenue']].sum()
-    meal_tmp['Revenue per pax'] = meal_tmp['Total Revenue'] / meal_tmp['Agreed']
-    meal_tmp = meal_tmp[['Revenue per pax', 'Agreed']].T
-    return meal_tmp
 
-# Sync data to BQT Meal Worksheet
-ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
-# exclude all package event
-Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
-# Breakfast table
-breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
-if breakfast.empty is False:
-    breakfast = meal_type_table(breakfast)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1])).Value = breakfast.values
-# Lunch table
-lunch = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Lunch')]
-if lunch.empty is False:
-    lunch = meal_type_table(lunch)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(22,2), ws_BQT_meal.Cells(23, 2 + lunch.shape[1])).Value = lunch.values
-# Dinner table
-dinner = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Dinner')]
-if dinner.empty is False:
-    dinner = meal_type_table(dinner)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1])).Value = dinner.values
+
+
 
 wb.SaveAs(save_path + 'Testing1.xlsx')
 
