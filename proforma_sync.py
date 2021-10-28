@@ -15,7 +15,7 @@ table = pd.read_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
 
 # Convert data to excel format
 def convert_to_excel(data, filename):
-    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1')
+    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1', )
 
 col = table.iloc[0]['Booking ID']
 BK_ID_no = str(int(col)).zfill(6)
@@ -51,6 +51,28 @@ Event_tmp['Start'] = pd.to_datetime(Event_tmp['Start']).dt.date
 
 
 
+RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'MM/dd/yyyy') AS PatternDate, \
+                             RoomN.nihrm__BlockedRooms1__c, RoomN.nihrm__BlockedRooms2__c, RoomN.nihrm__BlockedRooms3__c, RoomN.nihrm__BlockedRooms4__c, \
+                             RoomN.nihrm__BlockedRate1__c, RoomN.nihrm__BlockedRate2__c, RoomN.nihrm__BlockedRate3__c, RoomN.nihrm__BlockedRate4__c \
+                         FROM dbo.nihrm__BookingRoomNight__c AS RoomN \
+                         INNER JOIN dbo.nihrm__GuestroomType__c AS GS \
+                             ON RoomN.nihrm__GuestroomType__c = GS.Id \
+                         WHERE RoomN.nihrm__Booking__c = '" + BK_ID + "'", conn)
+RoomN_tmp.columns = ['Property', 'Room Type', 'Pattern Date', 'Room1', 'Room2', 'Room3', 'Room4', 'Rate1', 'Rate2', 'Rate3', 'Rate4']
+
+# TODO: Find a better solution to fix this
+# Melt Room Night number (4 Occupancy) to columns
+Room_no = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Room1', 'Room2', 'Room3', 'Room4']]
+Room_no = pd.melt(Room_no, id_vars=['Property', 'Room Type', 'Pattern Date'], value_name='Room')
+Room_no['variable'].replace('Room', '', inplace=True, regex=True)
+# Melt Room Rate (4 Occupancy) to columns
+Room_rate = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Rate1', 'Rate2', 'Rate3', 'Rate4']]
+Room_rate = pd.melt(Room_rate, id_vars=['Property', 'Room Type', 'Pattern Date'], value_name='Rate')
+Room_rate['variable'].replace('Rate', '', inplace=True, regex=True)
+# Join Room Night and Room Rate
+RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'variable'])
+RoomN_tmp['Pattern Date'] = pd.to_datetime(RoomN_tmp['Pattern Date']).dt.date
+
 #################################################
 
 
@@ -62,13 +84,20 @@ excel = win32.DispatchEx("Excel.Application")
 wb = excel.Workbooks.Open(save_path + 'Booking Proforma Template_unprotected.xlsx', None, True)
 
 
-# Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax
+# Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax By day
 def BQT_meal_table(meal_tmp):
     meal_tmp['Total Revenue'] = meal_tmp['Food Revenue'] + meal_tmp['Outlet Revenue']
     meal_tmp = meal_tmp.groupby('Start')[['Agreed', 'Total Revenue']].sum()
     meal_tmp['Revenue per pax'] = meal_tmp['Total Revenue'] / meal_tmp['Agreed']
     meal_tmp = meal_tmp[['Revenue per pax', 'Agreed']].T
     return meal_tmp
+
+# Calculate beverage and groupby to find Revenue per pax and Agreed pax By day
+def BQT_beverage_table(beverage_tmp):
+    beverage_tmp = beverage_tmp.groupby('Start')[['Agreed', 'Beverage Revenue']].sum()
+    beverage_tmp['Revenue per pax'] = beverage_tmp['Beverage Revenue'] / beverage_tmp['Agreed']
+    beverage_tmp = beverage_tmp[['Revenue per pax', 'Agreed']].T
+    return beverage_tmp
 
 
 # Sync data to Proforma Worksheet
@@ -83,6 +112,30 @@ ws_Proforma.Range("C5").Value = BK_tmp.iloc[0]['nihrm__Property__c']
 # Booking Owner
 ws_Proforma.Range("C6").Value = BK_tmp.iloc[0]['OwnerId']
 
+
+# Sync data to Proforma Worksheet
+ws_Room = wb.Worksheets('A. Room')
+
+# Venetian
+RoomN_venetian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Venetian')]
+RoomN_venetian['Type'] = pd.np.where(RoomN_venetian['Room Type'].str.contains("Royale"), "King",
+                         pd.np.where(RoomN_venetian['Room Type'].str.contains("Bella"), "Double", "Suite"))
+RoomN_venetian = RoomN_venetian[['Pattern Date', 'Type', 'Room', 'Rate']]
+add_king_emp_row = [RoomN_venetian.iloc[0]['Pattern Date'], 'King', 0, 0]
+add_double_emp_row = [RoomN_venetian.iloc[0]['Pattern Date'], 'Double', 0, 0]
+add_Suite_emp_row = [RoomN_venetian.iloc[0]['Pattern Date'], 'Suite', 0, 0]
+RoomN = 'RoomN1'
+convert_to_excel(RoomN_venetian, RoomN)
+RoomN_venetian = RoomN_venetian.append(pd.DataFrame([add_king_emp_row, add_double_emp_row, add_Suite_emp_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
+RoomN_venetian['Revenue'] = RoomN_venetian['Room'] * RoomN_venetian['Rate']
+RoomN_venetian = RoomN_venetian.groupby(['Pattern Date', 'Type'])['Room', 'Revenue'].sum().unstack(fill_value=0).stack()
+RoomN_venetian['Daily Rate'] = RoomN_venetian['Revenue'] / RoomN_venetian['Room']
+RoomN_venetian = RoomN_venetian[['Room', 'Daily Rate']].T
+
+
+
+RoomN = 'RoomN2'
+convert_to_excel(RoomN_venetian, RoomN)
 
 # Sync data to BQT Worksheet
 ws_BQT = wb.Worksheets('B. BQT')
@@ -100,23 +153,22 @@ Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Pa
 breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
 if breakfast.empty is False:
     breakfast = BQT_meal_table(breakfast)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1])).Value = breakfast.values
+    ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1] - 1)).Value = breakfast.values
 # Lunch table
 lunch = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Lunch')]
 if lunch.empty is False:
     lunch = BQT_meal_table(lunch)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(22,2), ws_BQT_meal.Cells(23, 2 + lunch.shape[1])).Value = lunch.values
+    ws_BQT_meal.Range(ws_BQT_meal.Cells(22,2), ws_BQT_meal.Cells(23, 2 + lunch.shape[1] - 1)).Value = lunch.values
 # Dinner table
 dinner = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Dinner')]
 if dinner.empty is False:
     dinner = BQT_meal_table(dinner)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1])).Value = dinner.values
+    ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1] - 1)).Value = dinner.values
 # Beverage table
 beverage = Event_wo_package
 if beverage.empty is False:
-# TODO
-#    dinner = BQT_meal_table(dinner)
-#    ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + dinner.shape[1])).Value = dinner.values
+    beverage = BQT_beverage_table(beverage)
+    ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + beverage.shape[1] - 1)).Value = beverage.values
 
 
 # Sync data to Entertainment Worksheet
