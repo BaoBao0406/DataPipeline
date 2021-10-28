@@ -15,7 +15,7 @@ table = pd.read_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
 
 # Convert data to excel format
 def convert_to_excel(data, filename):
-    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1', )
+    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1')
 
 col = table.iloc[0]['Booking ID']
 BK_ID_no = str(int(col)).zfill(6)
@@ -41,7 +41,7 @@ BK_tmp['OwnerId'].replace(user, inplace=True)
 BK_ID = BK_tmp.iloc[0]['Id']
 
 # extract event info
-Event_tmp = pd.read_sql("SELECT ET.Name, FR.Name, ET.nihrm__EventClassificationName__c, FORMAT(ET.nihrm__StartDate__c, 'MM/dd/yyyy') AS Start, ET.nihrm__AgreedEventAttendance__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastRevenue1__c, ET.nihrm__ForecastAverageCheck9__c, ET.nihrm__ForecastAverageCheckFactor9__c, ET.nihrm__ForecastRevenue9__c, ET.nihrm__ForecastAverageCheck2__c, ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c \
+Event_tmp = pd.read_sql("SELECT ET.Name, FR.Name, ET.nihrm__EventClassificationName__c, FORMAT(ET.nihrm__StartDate__c, 'yyyy/MM/dd') AS Start, ET.nihrm__AgreedEventAttendance__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastRevenue1__c, ET.nihrm__ForecastAverageCheck9__c, ET.nihrm__ForecastAverageCheckFactor9__c, ET.nihrm__ForecastRevenue9__c, ET.nihrm__ForecastAverageCheck2__c, ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c \
                          FROM dbo.nihrm__BookingEvent__c AS ET \
                          INNER JOIN dbo.nihrm__FunctionRoom__c AS FR \
                              ON ET.nihrm__FunctionRoom__c = FR.Id \
@@ -51,7 +51,7 @@ Event_tmp['Start'] = pd.to_datetime(Event_tmp['Start']).dt.date
 
 
 
-RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'MM/dd/yyyy') AS PatternDate, \
+RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'yyyy/MM/dd') AS PatternDate, \
                              RoomN.nihrm__BlockedRooms1__c, RoomN.nihrm__BlockedRooms2__c, RoomN.nihrm__BlockedRooms3__c, RoomN.nihrm__BlockedRooms4__c, \
                              RoomN.nihrm__BlockedRate1__c, RoomN.nihrm__BlockedRate2__c, RoomN.nihrm__BlockedRate3__c, RoomN.nihrm__BlockedRate4__c \
                          FROM dbo.nihrm__BookingRoomNight__c AS RoomN \
@@ -100,6 +100,26 @@ def BQT_beverage_table(beverage_tmp):
     return beverage_tmp
 
 
+# Calculate room table to find number of room and Revenue per pax By day
+def Room_type_table(RoomN_tb_tmp):
+    RoomN_tb_tmp['Type'] = pd.np.where(RoomN_tb_tmp['Room Type'].str.contains("Royale"), "King",
+                             pd.np.where(RoomN_tb_tmp['Room Type'].str.contains("Bella"), "Double", "Suite"))
+    RoomN_tb_tmp = RoomN_tb_tmp[['Pattern Date', 'Type', 'Room', 'Rate']]
+    # Capture all three room type for BP table in room (some bookings may only have one or two type)
+    room_type = set(['Double', 'King', 'Suite'])
+    room_type_inc = set(pd.unique(RoomN_tb_tmp['Type']))
+    
+    for rm in list(room_type-room_type_inc):
+        add_row = [RoomN_tb_tmp.iloc[0]['Pattern Date'], str(rm), 0, 0]
+    
+    RoomN_tb_tmp = RoomN_tb_tmp.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
+    RoomN_tb_tmp['Revenue'] = RoomN_tb_tmp['Room'] * RoomN_tb_tmp['Rate']
+    RoomN_tb_tmp = RoomN_tb_tmp.groupby(['Pattern Date', 'Type'])['Room', 'Revenue'].sum().unstack(fill_value=0).stack()
+    RoomN_tb_tmp['Daily Rate'] = (RoomN_tb_tmp['Revenue'] / RoomN_tb_tmp['Room']).fillna(0)
+    RoomN_tb_tmp = RoomN_tb_tmp[['Room', 'Daily Rate']].T
+    return RoomN_tb_tmp
+
+
 # Sync data to Proforma Worksheet
 ws_Proforma = wb.Worksheets('Proforma')
 
@@ -118,24 +138,16 @@ ws_Room = wb.Worksheets('A. Room')
 
 # Venetian
 RoomN_venetian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Venetian')]
-RoomN_venetian['Type'] = pd.np.where(RoomN_venetian['Room Type'].str.contains("Royale"), "King",
-                         pd.np.where(RoomN_venetian['Room Type'].str.contains("Bella"), "Double", "Suite"))
-RoomN_venetian = RoomN_venetian[['Pattern Date', 'Type', 'Room', 'Rate']]
-add_king_emp_row = [RoomN_venetian.iloc[0]['Pattern Date'], 'King', 0, 0]
-add_double_emp_row = [RoomN_venetian.iloc[0]['Pattern Date'], 'Double', 0, 0]
-add_Suite_emp_row = [RoomN_venetian.iloc[0]['Pattern Date'], 'Suite', 0, 0]
-RoomN = 'RoomN1'
-convert_to_excel(RoomN_venetian, RoomN)
-RoomN_venetian = RoomN_venetian.append(pd.DataFrame([add_king_emp_row, add_double_emp_row, add_Suite_emp_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
-RoomN_venetian['Revenue'] = RoomN_venetian['Room'] * RoomN_venetian['Rate']
-RoomN_venetian = RoomN_venetian.groupby(['Pattern Date', 'Type'])['Room', 'Revenue'].sum().unstack(fill_value=0).stack()
-RoomN_venetian['Daily Rate'] = RoomN_venetian['Revenue'] / RoomN_venetian['Room']
-RoomN_venetian = RoomN_venetian[['Room', 'Daily Rate']].T
+if RoomN_venetian.empty is False:
+    RoomN_venetian = Room_type_table(RoomN_venetian)
+    ws_Room.Range(ws_Room.Cells(5,2), ws_Room.Cells(6, 2 + RoomN_venetian.shape[1] - 1)).Value = RoomN_venetian.values
 
+# Parisian
+RoomN_parisian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Parisian')]
+if RoomN_parisian.empty is False:
+    RoomN_parisian = Room_type_table(RoomN_parisian)
+    ws_Room.Range(ws_Room.Cells(11,2), ws_Room.Cells(12, 2 + RoomN_parisian.shape[1] - 1)).Value = RoomN_parisian.values
 
-
-RoomN = 'RoomN2'
-convert_to_excel(RoomN_venetian, RoomN)
 
 # Sync data to BQT Worksheet
 ws_BQT = wb.Worksheets('B. BQT')
