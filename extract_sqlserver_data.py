@@ -16,6 +16,7 @@ def convert_to_excel(data, filename):
 
 def BK_sql_data(BK_ID_no, user, conn):
     # extract booking info
+    print(BK_ID_no)
     BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'yyyy/MM/dd') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'yyyy/MM/dd') AS DepartureDate, BK.nihrm__CommissionPercentage__c, BK.nihrm__Property__c, BK.nihrm__FoodBeverageMinimum__c \
                           FROM dbo.nihrm__Booking__c AS BK \
                           WHERE BK.Booking_ID_Number__c = " + BK_ID_no, conn)
@@ -67,11 +68,14 @@ def Event_sql_data(BK_ID, conn):
 
 
 # main function for extract_sqlserver_data
-def extract_sqlserver_data():
+def sqlserver_data(table):
     
-    table = pd.read_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
-    col = table.iloc[0]['Booking ID']
+    # for testing purpose
+#    table = pd.read_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
+    
+    col = table['Booking ID']
     BK_ID_no = str(int(col)).zfill(6)
+    
 
     conn = pyodbc.connect('Driver={SQL Server};'
                           'Server=VOPPSCLDBN01\VOPPSCLDBI01;'
@@ -94,9 +98,11 @@ def extract_sqlserver_data():
 
     return BK_tmp, RoomN_tmp, Event_tmp
 
-# Data Checking
-#BK_tmp, RoomN_tmp, Event_tmp = extract_sqlserver_data()
 
+
+# Data Checking
+#BK_tmp, RoomN_tmp, Event_tmp = sqlserver_data()
+#
 #BK = 'BKinfo'
 #convert_to_excel(BK_tmp, BK)
 #
