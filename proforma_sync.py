@@ -4,8 +4,9 @@
 #################################################
 import pyodbc
 import pandas as pd
-import datetime, os.path
+import os.path
 import numpy as np
+from datetime import timedelta
 
 
 save_path = 'I:\\10-Sales\\Personal Folder\\Admin & Assistant Team\\Patrick Leong\\Python Code\\DataPipeline\\'
@@ -39,6 +40,7 @@ BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__Arriva
                       WHERE BK.Booking_ID_Number__c = " + BK_ID_no, conn)
 BK_tmp['OwnerId'].replace(user, inplace=True)
 BK_ID = BK_tmp.iloc[0]['Id']
+
 
 # extract event info
 Event_tmp = pd.read_sql("SELECT ET.Name, FR.Name, ET.nihrm__EventClassificationName__c, FORMAT(ET.nihrm__StartDate__c, 'yyyy/MM/dd') AS Start, ET.nihrm__AgreedEventAttendance__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastRevenue1__c, ET.nihrm__ForecastAverageCheck9__c, ET.nihrm__ForecastAverageCheckFactor9__c, ET.nihrm__ForecastRevenue9__c, ET.nihrm__ForecastAverageCheck2__c, ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c \
@@ -86,19 +88,40 @@ wb = excel.Workbooks.Open(save_path + 'Booking Proforma Template_unprotected.xls
 
 # Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax By day
 def BQT_meal_table(meal_tmp):
+    meal_tmp = meal_tmp[['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']]
+    if meal_tmp['Start'].min() != start_day:
+        for d in range((meal_tmp['Start'].min() - start_day).days):
+            add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0, 0]
+            meal_tmp = meal_tmp.append(pd.DataFrame([add_row], columns=['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']),ignore_index=True)
     meal_tmp['Total Revenue'] = meal_tmp['Food Revenue'] + meal_tmp['Outlet Revenue']
     meal_tmp = meal_tmp.groupby('Start')[['Agreed', 'Total Revenue']].sum()
-    meal_tmp['Revenue per pax'] = meal_tmp['Total Revenue'] / meal_tmp['Agreed']
+    meal_tmp['Revenue per pax'] = (meal_tmp['Total Revenue'] / meal_tmp['Agreed']).fillna(0)
     meal_tmp = meal_tmp[['Revenue per pax', 'Agreed']].T
     return meal_tmp
 
 # Calculate beverage and groupby to find Revenue per pax and Agreed pax By day
 def BQT_beverage_table(beverage_tmp):
+    beverage_tmp = beverage_tmp[['Start', 'Beverage Revenue', 'Agreed']]
+    if beverage_tmp['Start'].min() != start_day:
+         for d in range((beverage_tmp['Start'].min() - start_day).days):
+            add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0]
+            beverage_tmp = beverage_tmp.append(pd.DataFrame([add_row], columns=['Start', 'Beverage Revenue', 'Agreed']),ignore_index=True)
     beverage_tmp = beverage_tmp.groupby('Start')[['Agreed', 'Beverage Revenue']].sum()
-    beverage_tmp['Revenue per pax'] = beverage_tmp['Beverage Revenue'] / beverage_tmp['Agreed']
+    beverage_tmp['Revenue per pax'] = (beverage_tmp['Beverage Revenue'] / beverage_tmp['Agreed']).fillna(0)
     beverage_tmp = beverage_tmp[['Revenue per pax', 'Agreed']].T
     return beverage_tmp
 
+start_rm = RoomN_tmp['Pattern Date'].min()
+start_et = Event_tmp['Start'].min()
+start_day = min(start_rm, start_et)
+
+
+#test_table = pd.DataFrame(columns=['Pattern Date', 'Type', 'Room', 'Rate'])
+#if start_day < start_rm:
+#    for d in range((start_rm - start_day).days):
+#        add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0, 0]
+#
+#        test_table = test_table.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
 
 # Calculate room table to find number of room and Revenue per pax By day
 def Room_type_table(RoomN_tb_tmp):
@@ -163,6 +186,10 @@ ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
 Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
 # Breakfast table
 breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
+
+EventT = 'EventT'
+convert_to_excel(breakfast, EventT)
+
 if breakfast.empty is False:
     breakfast = BQT_meal_table(breakfast)
     ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1] - 1)).Value = breakfast.values
@@ -177,7 +204,7 @@ if dinner.empty is False:
     dinner = BQT_meal_table(dinner)
     ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1] - 1)).Value = dinner.values
 # Beverage table
-beverage = Event_wo_package
+beverage = Event_wo_package[Event_wo_package['Beverage Revenue'] != 0]
 if beverage.empty is False:
     beverage = BQT_beverage_table(beverage)
     ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + beverage.shape[1] - 1)).Value = beverage.values
