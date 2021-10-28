@@ -85,12 +85,18 @@ from win32com.client import constants
 excel = win32.DispatchEx("Excel.Application")
 wb = excel.Workbooks.Open(save_path + 'Booking Proforma Template_unprotected.xlsx', None, True)
 
+# Calculate the actual start day for either room or event
+start_rm = RoomN_tmp['Pattern Date'].min()
+start_et = Event_tmp['Start'].min()
+start_day = min(start_rm, start_et)
+
 
 # Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax By day
 def BQT_meal_table(meal_tmp):
     meal_tmp = meal_tmp[['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']]
-    if meal_tmp['Start'].min() != start_day:
-        for d in range((meal_tmp['Start'].min() - start_day).days):
+    first_day_event = meal_tmp['Start'].min()
+    if first_day_event != start_day:
+        for d in range((first_day_event - start_day).days):
             add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0, 0]
             meal_tmp = meal_tmp.append(pd.DataFrame([add_row], columns=['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']),ignore_index=True)
     meal_tmp['Total Revenue'] = meal_tmp['Food Revenue'] + meal_tmp['Outlet Revenue']
@@ -102,8 +108,9 @@ def BQT_meal_table(meal_tmp):
 # Calculate beverage and groupby to find Revenue per pax and Agreed pax By day
 def BQT_beverage_table(beverage_tmp):
     beverage_tmp = beverage_tmp[['Start', 'Beverage Revenue', 'Agreed']]
-    if beverage_tmp['Start'].min() != start_day:
-         for d in range((beverage_tmp['Start'].min() - start_day).days):
+    first_day_event = beverage_tmp['Start'].min()
+    if first_day_event != start_day:
+         for d in range((first_day_event - start_day).days):
             add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0]
             beverage_tmp = beverage_tmp.append(pd.DataFrame([add_row], columns=['Start', 'Beverage Revenue', 'Agreed']),ignore_index=True)
     beverage_tmp = beverage_tmp.groupby('Start')[['Agreed', 'Beverage Revenue']].sum()
@@ -111,31 +118,23 @@ def BQT_beverage_table(beverage_tmp):
     beverage_tmp = beverage_tmp[['Revenue per pax', 'Agreed']].T
     return beverage_tmp
 
-start_rm = RoomN_tmp['Pattern Date'].min()
-start_et = Event_tmp['Start'].min()
-start_day = min(start_rm, start_et)
-
-
-#test_table = pd.DataFrame(columns=['Pattern Date', 'Type', 'Room', 'Rate'])
-#if start_day < start_rm:
-#    for d in range((start_rm - start_day).days):
-#        add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0, 0]
-#
-#        test_table = test_table.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
-
 # Calculate room table to find number of room and Revenue per pax By day
 def Room_type_table(RoomN_tb_tmp):
-    RoomN_tb_tmp['Type'] = pd.np.where(RoomN_tb_tmp['Room Type'].str.contains("Royale"), "King",
-                             pd.np.where(RoomN_tb_tmp['Room Type'].str.contains("Bella"), "Double", "Suite"))
     RoomN_tb_tmp = RoomN_tb_tmp[['Pattern Date', 'Type', 'Room', 'Rate']]
     # Capture all three room type for BP table in room (some bookings may only have one or two type)
     room_type = set(['Double', 'King', 'Suite'])
     room_type_inc = set(pd.unique(RoomN_tb_tmp['Type']))
     
     for rm in list(room_type-room_type_inc):
-        add_row = [RoomN_tb_tmp.iloc[0]['Pattern Date'], str(rm), 0, 0]
-    
-    RoomN_tb_tmp = RoomN_tb_tmp.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
+        first_day_room = RoomN_tb_tmp['Pattern Date'].min()
+        if first_day_room != start_day:
+            for d in range((first_day_room - start_day).days):
+                add_row = [pd.to_datetime(start_day) + timedelta(days=d), str(rm), 0, 0]
+                RoomN_tb_tmp = RoomN_tb_tmp.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
+        else:
+            add_row = [pd.to_datetime(start_day), str(rm), 0, 0]
+            RoomN_tb_tmp = RoomN_tb_tmp.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
+        
     RoomN_tb_tmp['Revenue'] = RoomN_tb_tmp['Room'] * RoomN_tb_tmp['Rate']
     RoomN_tb_tmp = RoomN_tb_tmp.groupby(['Pattern Date', 'Type'])['Room', 'Revenue'].sum().unstack(fill_value=0).stack()
     RoomN_tb_tmp['Daily Rate'] = (RoomN_tb_tmp['Revenue'] / RoomN_tb_tmp['Room']).fillna(0)
@@ -162,14 +161,26 @@ ws_Room = wb.Worksheets('A. Room')
 # Venetian
 RoomN_venetian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Venetian')]
 if RoomN_venetian.empty is False:
+    RoomN_venetian['Type'] = pd.np.where(RoomN_venetian['Room Type'].str.contains("Royale"), "King",
+                             pd.np.where(RoomN_venetian['Room Type'].str.contains("Bella"), "Double", "Suite"))
     RoomN_venetian = Room_type_table(RoomN_venetian)
     ws_Room.Range(ws_Room.Cells(5,2), ws_Room.Cells(6, 2 + RoomN_venetian.shape[1] - 1)).Value = RoomN_venetian.values
-
 # Parisian
 RoomN_parisian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Parisian')]
 if RoomN_parisian.empty is False:
+    RoomN_parisian['Type'] = pd.np.where(RoomN_parisian['Room Type'].str.contains("Deluxe King|Eiffel Tower King"), "King",
+                             pd.np.where(RoomN_parisian['Room Type'].str.contains("Deluxe Double|Eiffel Tower Double"), "Double", "Suite"))
     RoomN_parisian = Room_type_table(RoomN_parisian)
     ws_Room.Range(ws_Room.Cells(11,2), ws_Room.Cells(12, 2 + RoomN_parisian.shape[1] - 1)).Value = RoomN_parisian.values
+# Conrad
+RoomN_conrad = RoomN_tmp[RoomN_tmp['Property'].str.contains('Conrad')]
+if RoomN_conrad.empty is False:
+    RoomN_conrad['Type'] = pd.np.where(RoomN_conrad['Room Type'].str.contains("Suite"), "Suite",
+                             pd.np.where(RoomN_conrad['Room Type'].str.contains("Queens Deluxe"), "Double", "King"))
+    RoomN_conrad = Room_type_table(RoomN_conrad)
+    ws_Room.Range(ws_Room.Cells(17,2), ws_Room.Cells(18, 2 + RoomN_conrad.shape[1] - 1)).Value = RoomN_conrad.values
+# Commission
+ws_Room.Range("E47").Value = BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] / 100
 
 
 # Sync data to BQT Worksheet
@@ -186,10 +197,6 @@ ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
 Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
 # Breakfast table
 breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
-
-EventT = 'EventT'
-convert_to_excel(breakfast, EventT)
-
 if breakfast.empty is False:
     breakfast = BQT_meal_table(breakfast)
     ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1] - 1)).Value = breakfast.values
