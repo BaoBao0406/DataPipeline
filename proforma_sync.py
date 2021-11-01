@@ -19,7 +19,10 @@ def convert_to_excel(data, filename):
     data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1')
 
 col = table.iloc[0]['Booking ID']
+# Testing booking with BK_ID directly
+# BK_ID_no = ''
 BK_ID_no = str(int(col)).zfill(6)
+
 
 conn = pyodbc.connect('Driver={SQL Server};'
                       'Server=VOPPSCLDBN01\VOPPSCLDBI01;'
@@ -35,7 +38,7 @@ user = user.set_index('Id')['Name'].to_dict()
 
 
 # extract booking info
-BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'yyyy/MM/dd') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'yyyy/MM/dd') AS DepartureDate, BK.nihrm__CommissionPercentage__c, BK.nihrm__Property__c, BK.nihrm__FoodBeverageMinimum__c \
+BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'yyyy-MM-dd') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'yyyy-MM-dd') AS DepartureDate, BK.nihrm__CommissionPercentage__c, BK.nihrm__Property__c, BK.nihrm__FoodBeverageMinimum__c \
                       FROM dbo.nihrm__Booking__c AS BK \
                       WHERE BK.Booking_ID_Number__c = " + BK_ID_no, conn)
 BK_tmp['OwnerId'].replace(user, inplace=True)
@@ -82,17 +85,8 @@ import win32com.client as win32
 from win32com.client import constants
 
 
-excel = win32.DispatchEx("Excel.Application")
-wb = excel.Workbooks.Open(save_path + 'Booking Proforma Template_unprotected.xlsx', None, True)
-
-# Calculate the actual start day for either room or event
-start_rm = RoomN_tmp['Pattern Date'].min()
-start_et = Event_tmp['Start'].min()
-start_day = min(start_rm, start_et)
-
-
 # Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax By day
-def BQT_meal_table(meal_tmp):
+def BQT_meal_table(meal_tmp, start_day):
     meal_tmp = meal_tmp[['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']]
     first_day_event = meal_tmp['Start'].min()
     if first_day_event != start_day:
@@ -106,7 +100,7 @@ def BQT_meal_table(meal_tmp):
     return meal_tmp
 
 # Calculate beverage and groupby to find Revenue per pax and Agreed pax By day
-def BQT_beverage_table(beverage_tmp):
+def BQT_beverage_table(beverage_tmp, start_day):
     beverage_tmp = beverage_tmp[['Start', 'Beverage Revenue', 'Agreed']]
     first_day_event = beverage_tmp['Start'].min()
     if first_day_event != start_day:
@@ -119,13 +113,17 @@ def BQT_beverage_table(beverage_tmp):
     return beverage_tmp
 
 # Calculate room table to find number of room and Revenue per pax By day
-def Room_type_table(RoomN_tb_tmp):
+def Room_type_table(RoomN_tb_tmp, start_day):
     RoomN_tb_tmp = RoomN_tb_tmp[['Pattern Date', 'Type', 'Room', 'Rate']]
     # Capture all three room type for BP table in room (some bookings may only have one or two type)
     room_type = set(['Double', 'King', 'Suite'])
     room_type_inc = set(pd.unique(RoomN_tb_tmp['Type']))
-    
-    for rm in list(room_type-room_type_inc):
+    final_room_type = room_type-room_type_inc
+    # Make sure final_room_type is not empty. If yes, add at least one type.
+    if len(final_room_type) == 0:
+        final_room_type = set(['King'])
+    # 
+    for rm in list(final_room_type):
         first_day_room = RoomN_tb_tmp['Pattern Date'].min()
         if first_day_room != start_day:
             for d in range((first_day_room - start_day).days):
@@ -142,111 +140,141 @@ def Room_type_table(RoomN_tb_tmp):
     return RoomN_tb_tmp
 
 
-# Sync data to Proforma Worksheet
-ws_Proforma = wb.Worksheets('Proforma')
-
-# Post As
-ws_Proforma.Range("C3").Value = BK_tmp.iloc[0]['Name']
-# Arrival and Departure
-ws_Proforma.Range("C4").Value = BK_tmp.iloc[0]['ArrivalDate'] + ' - ' + BK_tmp.iloc[0]['DepartureDate']
-# Venue
-ws_Proforma.Range("C5").Value = BK_tmp.iloc[0]['nihrm__Property__c']
-# Booking Owner
-ws_Proforma.Range("C6").Value = BK_tmp.iloc[0]['OwnerId']
-
-
-# Sync data to Proforma Worksheet
-ws_Room = wb.Worksheets('A. Room')
-
-# Venetian
-RoomN_venetian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Venetian')]
-if RoomN_venetian.empty is False:
-    RoomN_venetian['Type'] = pd.np.where(RoomN_venetian['Room Type'].str.contains("Royale"), "King",
-                             pd.np.where(RoomN_venetian['Room Type'].str.contains("Bella"), "Double", "Suite"))
-    RoomN_venetian = Room_type_table(RoomN_venetian)
-    ws_Room.Range(ws_Room.Cells(5,2), ws_Room.Cells(6, 2 + RoomN_venetian.shape[1] - 1)).Value = RoomN_venetian.values
-# Parisian
-RoomN_parisian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Parisian')]
-if RoomN_parisian.empty is False:
-    RoomN_parisian['Type'] = pd.np.where(RoomN_parisian['Room Type'].str.contains("Deluxe King|Eiffel Tower King"), "King",
-                             pd.np.where(RoomN_parisian['Room Type'].str.contains("Deluxe Double|Eiffel Tower Double"), "Double", "Suite"))
-    RoomN_parisian = Room_type_table(RoomN_parisian)
-    ws_Room.Range(ws_Room.Cells(11,2), ws_Room.Cells(12, 2 + RoomN_parisian.shape[1] - 1)).Value = RoomN_parisian.values
-# Conrad
-RoomN_conrad = RoomN_tmp[RoomN_tmp['Property'].str.contains('Conrad')]
-if RoomN_conrad.empty is False:
-    RoomN_conrad['Type'] = pd.np.where(RoomN_conrad['Room Type'].str.contains("Suite"), "Suite",
-                             pd.np.where(RoomN_conrad['Room Type'].str.contains("Queens Deluxe"), "Double", "King"))
-    RoomN_conrad = Room_type_table(RoomN_conrad)
-    ws_Room.Range(ws_Room.Cells(17,2), ws_Room.Cells(18, 2 + RoomN_conrad.shape[1] - 1)).Value = RoomN_conrad.values
-# Commission
-ws_Room.Range("E47").Value = BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] / 100
+# 
+def Booking_information(wb):
+    # Sync data to Proforma Worksheet
+    ws_Proforma = wb.Worksheets('Proforma')
+    
+    # Post As
+    ws_Proforma.Range("C3").Value = BK_tmp.iloc[0]['Name']
+    # Arrival and Departure
+    ws_Proforma.Range("C4").Value = BK_tmp.iloc[0]['ArrivalDate'] + ' - ' + BK_tmp.iloc[0]['DepartureDate']
+    # Venue
+    ws_Proforma.Range("C5").Value = BK_tmp.iloc[0]['nihrm__Property__c']
+    # Booking Owner
+    ws_Proforma.Range("C6").Value = BK_tmp.iloc[0]['OwnerId']
 
 
-# Sync data to BQT Worksheet
-ws_BQT = wb.Worksheets('B. BQT')
-
-# F&B minimum
-ws_BQT.Range("B7").Value = BK_tmp.iloc[0]['nihrm__FoodBeverageMinimum__c']
-# TODO: Rebate
-
-
-# Sync data to BQT Meal Worksheet
-ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
-# exclude all package event
-Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
-# Breakfast table
-breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
-if breakfast.empty is False:
-    breakfast = BQT_meal_table(breakfast)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1] - 1)).Value = breakfast.values
-# Lunch table
-lunch = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Lunch')]
-if lunch.empty is False:
-    lunch = BQT_meal_table(lunch)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(22,2), ws_BQT_meal.Cells(23, 2 + lunch.shape[1] - 1)).Value = lunch.values
-# Dinner table
-dinner = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Dinner')]
-if dinner.empty is False:
-    dinner = BQT_meal_table(dinner)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1] - 1)).Value = dinner.values
-# Beverage table
-beverage = Event_wo_package[Event_wo_package['Beverage Revenue'] != 0]
-if beverage.empty is False:
-    beverage = BQT_beverage_table(beverage)
-    ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + beverage.shape[1] - 1)).Value = beverage.values
+# 
+def Room_info(wb, start_day):
+    # Sync data to Room Worksheet
+    ws_Room = wb.Worksheets('A. Room')
+    
+    # Venetian
+    RoomN_venetian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Venetian')]
+    if RoomN_venetian.empty is False:
+        RoomN_venetian['Type'] = pd.np.where(RoomN_venetian['Room Type'].str.contains("Royale"), "King",
+                                 pd.np.where(RoomN_venetian['Room Type'].str.contains("Bella"), "Double", "Suite"))
+        RoomN_venetian = Room_type_table(RoomN_venetian, start_day)
+        ws_Room.Range(ws_Room.Cells(5,2), ws_Room.Cells(6, 2 + RoomN_venetian.shape[1] - 1)).Value = RoomN_venetian.values
+    # Parisian
+    RoomN_parisian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Parisian')]
+    if RoomN_parisian.empty is False:
+        RoomN_parisian['Type'] = pd.np.where(RoomN_parisian['Room Type'].str.contains("Deluxe King|Eiffel Tower King"), "King",
+                                 pd.np.where(RoomN_parisian['Room Type'].str.contains("Deluxe Double|Eiffel Tower Double"), "Double", "Suite"))
+        RoomN_parisian = Room_type_table(RoomN_parisian, start_day)
+        ws_Room.Range(ws_Room.Cells(11,2), ws_Room.Cells(12, 2 + RoomN_parisian.shape[1] - 1)).Value = RoomN_parisian.values
+    # Conrad
+    RoomN_conrad = RoomN_tmp[RoomN_tmp['Property'].str.contains('Conrad')]
+    if RoomN_conrad.empty is False:
+        RoomN_conrad['Type'] = pd.np.where(RoomN_conrad['Room Type'].str.contains("Suite"), "Suite",
+                                 pd.np.where(RoomN_conrad['Room Type'].str.contains("Queens Deluxe"), "Double", "King"))
+        RoomN_conrad = Room_type_table(RoomN_conrad, start_day)
+        ws_Room.Range(ws_Room.Cells(17,2), ws_Room.Cells(18, 2 + RoomN_conrad.shape[1] - 1)).Value = RoomN_conrad.values
+    # Commission
+    ws_Room.Range("E47").Value = BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] / 100
 
 
-# Sync data to Entertainment Worksheet
-ws_entertain = wb.Worksheets('D. Entertainment')
+# 
+def Meal_info(wb, start_day):
+    # Sync data to BQT Worksheet
+    ws_BQT = wb.Worksheets('B. BQT')
+    
+    # F&B minimum
+    ws_BQT.Range("B7").Value = BK_tmp.iloc[0]['nihrm__FoodBeverageMinimum__c']
+    # TODO: Rebate
+    
+    
+    # Sync data to BQT Meal Worksheet
+    ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
+    # exclude all package event
+    Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
+    # Breakfast table
+    breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
+    if breakfast.empty is False:
+        breakfast = BQT_meal_table(breakfast, start_day)
+        ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1] - 1)).Value = breakfast.values
+    # Lunch table
+    lunch = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Lunch')]
+    if lunch.empty is False:
+        lunch = BQT_meal_table(lunch, start_day)
+        ws_BQT_meal.Range(ws_BQT_meal.Cells(22,2), ws_BQT_meal.Cells(23, 2 + lunch.shape[1] - 1)).Value = lunch.values
+    # Dinner table
+    dinner = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Dinner')]
+    if dinner.empty is False:
+        dinner = BQT_meal_table(dinner, start_day)
+        ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1] - 1)).Value = dinner.values
+    # Beverage table
+    beverage = Event_wo_package[Event_wo_package['Beverage Revenue'] != 0]
+    if beverage.empty is False:
+        beverage = BQT_beverage_table(beverage, start_day)
+        ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + beverage.shape[1] - 1)).Value = beverage.values
 
-# Arena Rental
-arena = (Event_tmp[Event_tmp['Function Space'].str.contains('Arena')])['Rental Revenue'].sum()
-ws_entertain.Range("B3").Value = arena
-# Venetian Theatre Rental
-venetian_theatre = (Event_tmp[Event_tmp['Function Space'].str.contains('Venetian Theatre')])['Rental Revenue'].sum()
-ws_entertain.Range("B4").Value = venetian_theatre
-# Parisian Theatre Rental
-parisian_theatre = (Event_tmp[Event_tmp['Function Space'].str.contains('Parisian Theatre')])['Rental Revenue'].sum()
-ws_entertain.Range("B5").Value = parisian_theatre
+
+#
+def Entertainment_and_CE_info(wb):
+    # Sync data to Entertainment Worksheet
+    ws_entertain = wb.Worksheets('D. Entertainment')
+    
+    # Arena Rental
+    arena = (Event_tmp[Event_tmp['Function Space'].str.contains('Arena')])['Rental Revenue'].sum()
+    ws_entertain.Range("B3").Value = arena
+    # Venetian Theatre Rental
+    venetian_theatre = (Event_tmp[Event_tmp['Function Space'].str.contains('Venetian Theatre')])['Rental Revenue'].sum()
+    ws_entertain.Range("B4").Value = venetian_theatre
+    # Parisian Theatre Rental
+    parisian_theatre = (Event_tmp[Event_tmp['Function Space'].str.contains('Parisian Theatre')])['Rental Revenue'].sum()
+    ws_entertain.Range("B5").Value = parisian_theatre
 
 
-# Sync data to C&E Worksheet
-ws_CE = wb.Worksheets('C. C&E')
-
-# Hall Rental
-hall = (Event_tmp[Event_tmp['Function Space'].str.contains('Hall')])['Rental Revenue'].sum()
-ws_CE.Range("B5").Value = hall
-# AV Revenue
-ws_CE.Range("B6").Value = Event_tmp['AV Revenue'].sum()
-# Room Rental
-ws_CE.Range("B4").Value = Event_tmp['Rental Revenue'].sum() - arena - venetian_theatre - parisian_theatre - hall
-
-
+    # Sync data to C&E Worksheet
+    ws_CE = wb.Worksheets('C. C&E')
+    
+    # Hall Rental
+    hall = (Event_tmp[Event_tmp['Function Space'].str.contains('Hall')])['Rental Revenue'].sum()
+    ws_CE.Range("B5").Value = hall
+    # AV Revenue
+    ws_CE.Range("B6").Value = Event_tmp['AV Revenue'].sum()
+    # Room Rental
+    ws_CE.Range("B4").Value = Event_tmp['Rental Revenue'].sum() - arena - venetian_theatre - parisian_theatre - hall
 
 
+# main function for proforma_sync
+def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
+    
+    excel = win32.DispatchEx("Excel.Application")
+    wb = excel.Workbooks.Open(save_path + 'Booking Proforma Template_unprotected.xlsx', None, True)
+    
+    # Calculate the actual start day for either room or event
+    start_rm = RoomN_tmp['Pattern Date'].min()
+    start_et = Event_tmp['Start'].min()
+    start_day = min(start_rm, start_et)
+    
+    Booking_information(wb)
+    
+    Room_info(wb, start_day)
+    
+    Meal_info(wb, start_day)
+    
+    Entertainment_and_CE_info(wb)
 
 
-wb.SaveAs(save_path + 'Testing1.xlsx')
+    excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsx'
+    
+    # Save path for debugging
+    # save_path = 'I:\\10-Sales\\+Contracts (Expiration + 10Y, Internal)\\2021\\Proforma P&L\\'
+    wb.SaveAs(save_path + excelfile_name)
+    wb.Close(True)
 
-wb.Close(True)
+
+proforma_sync(BK_tmp, RoomN_tmp, Event_tmp)
