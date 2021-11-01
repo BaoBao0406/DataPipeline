@@ -89,12 +89,16 @@ from win32com.client import constants
 def BQT_meal_table(meal_tmp, start_day):
     meal_tmp = meal_tmp[['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']]
     first_day_event = meal_tmp['Start'].min()
+    # Check if 
     if first_day_event != start_day:
         for d in range((first_day_event - start_day).days):
             add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0, 0]
             meal_tmp = meal_tmp.append(pd.DataFrame([add_row], columns=['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']),ignore_index=True)
+    # Add up Food and Outlet Revenue for Total Revenue
     meal_tmp['Total Revenue'] = meal_tmp['Food Revenue'] + meal_tmp['Outlet Revenue']
+    # 
     meal_tmp = meal_tmp.groupby('Start')[['Agreed', 'Total Revenue']].sum()
+    # Calculation for Revenue per pax column
     meal_tmp['Revenue per pax'] = (meal_tmp['Total Revenue'] / meal_tmp['Agreed']).fillna(0)
     meal_tmp = meal_tmp[['Revenue per pax', 'Agreed']].T
     return meal_tmp
@@ -103,11 +107,14 @@ def BQT_meal_table(meal_tmp, start_day):
 def BQT_beverage_table(beverage_tmp, start_day):
     beverage_tmp = beverage_tmp[['Start', 'Beverage Revenue', 'Agreed']]
     first_day_event = beverage_tmp['Start'].min()
+    # 
     if first_day_event != start_day:
          for d in range((first_day_event - start_day).days):
             add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0]
             beverage_tmp = beverage_tmp.append(pd.DataFrame([add_row], columns=['Start', 'Beverage Revenue', 'Agreed']),ignore_index=True)
+    # 
     beverage_tmp = beverage_tmp.groupby('Start')[['Agreed', 'Beverage Revenue']].sum()
+    # Calculation for Revenue per pax column
     beverage_tmp['Revenue per pax'] = (beverage_tmp['Beverage Revenue'] / beverage_tmp['Agreed']).fillna(0)
     beverage_tmp = beverage_tmp[['Revenue per pax', 'Agreed']].T
     return beverage_tmp
@@ -122,9 +129,10 @@ def Room_type_table(RoomN_tb_tmp, start_day):
     # Make sure final_room_type is not empty. If yes, add at least one type.
     if len(final_room_type) == 0:
         final_room_type = set(['King'])
-    # 
+    # Create event line if room pattern date is before event pattern date
     for rm in list(final_room_type):
         first_day_room = RoomN_tb_tmp['Pattern Date'].min()
+        # 
         if first_day_room != start_day:
             for d in range((first_day_room - start_day).days):
                 add_row = [pd.to_datetime(start_day) + timedelta(days=d), str(rm), 0, 0]
@@ -132,37 +140,39 @@ def Room_type_table(RoomN_tb_tmp, start_day):
         else:
             add_row = [pd.to_datetime(start_day), str(rm), 0, 0]
             RoomN_tb_tmp = RoomN_tb_tmp.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
-        
+    # Calculate Revenue for each line in room data
     RoomN_tb_tmp['Revenue'] = RoomN_tb_tmp['Room'] * RoomN_tb_tmp['Rate']
     RoomN_tb_tmp = RoomN_tb_tmp.groupby(['Pattern Date', 'Type'])['Room', 'Revenue'].sum().unstack(fill_value=0).stack()
+    # Calculation for Revenue per pax column
     RoomN_tb_tmp['Daily Rate'] = (RoomN_tb_tmp['Revenue'] / RoomN_tb_tmp['Room']).fillna(0)
     RoomN_tb_tmp = RoomN_tb_tmp[['Room', 'Daily Rate']].T
     return RoomN_tb_tmp
 
 
-# 
-def Booking_information(wb):
-    # Sync data to Proforma Worksheet
+# Transfer data to excel Proforma Worksheet
+def Booking_information(wb, BK_tmp):
+    # Select Proforma Worksheet
     ws_Proforma = wb.Worksheets('Proforma')
     
     # Post As
     ws_Proforma.Range("C3").Value = BK_tmp.iloc[0]['Name']
     # Arrival and Departure
-    ws_Proforma.Range("C4").Value = BK_tmp.iloc[0]['ArrivalDate'] + ' - ' + BK_tmp.iloc[0]['DepartureDate']
+    ws_Proforma.Range("C4").Value = BK_tmp.iloc[0]['ArrivalDate'] + ' to ' + BK_tmp.iloc[0]['DepartureDate']
     # Venue
     ws_Proforma.Range("C5").Value = BK_tmp.iloc[0]['nihrm__Property__c']
     # Booking Owner
     ws_Proforma.Range("C6").Value = BK_tmp.iloc[0]['OwnerId']
 
 
-# 
-def Room_info(wb, start_day):
-    # Sync data to Room Worksheet
+# Transfer data to excel Room Worksheet
+def Room_info(wb, start_day, RoomN_tmp):
+    # Select Room Worksheet
     ws_Room = wb.Worksheets('A. Room')
     
     # Venetian
     RoomN_venetian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Venetian')]
     if RoomN_venetian.empty is False:
+        # Create column and rename Room Type into King, Double and Suite
         RoomN_venetian['Type'] = pd.np.where(RoomN_venetian['Room Type'].str.contains("Royale"), "King",
                                  pd.np.where(RoomN_venetian['Room Type'].str.contains("Bella"), "Double", "Suite"))
         RoomN_venetian = Room_type_table(RoomN_venetian, start_day)
@@ -170,6 +180,7 @@ def Room_info(wb, start_day):
     # Parisian
     RoomN_parisian = RoomN_tmp[RoomN_tmp['Property'].str.contains('Parisian')]
     if RoomN_parisian.empty is False:
+        # Create column and rename Room Type into King, Double and Suite
         RoomN_parisian['Type'] = pd.np.where(RoomN_parisian['Room Type'].str.contains("Deluxe King|Eiffel Tower King"), "King",
                                  pd.np.where(RoomN_parisian['Room Type'].str.contains("Deluxe Double|Eiffel Tower Double"), "Double", "Suite"))
         RoomN_parisian = Room_type_table(RoomN_parisian, start_day)
@@ -177,6 +188,7 @@ def Room_info(wb, start_day):
     # Conrad
     RoomN_conrad = RoomN_tmp[RoomN_tmp['Property'].str.contains('Conrad')]
     if RoomN_conrad.empty is False:
+        # Create column and rename Room Type into King, Double and Suite
         RoomN_conrad['Type'] = pd.np.where(RoomN_conrad['Room Type'].str.contains("Suite"), "Suite",
                                  pd.np.where(RoomN_conrad['Room Type'].str.contains("Queens Deluxe"), "Double", "King"))
         RoomN_conrad = Room_type_table(RoomN_conrad, start_day)
@@ -185,9 +197,9 @@ def Room_info(wb, start_day):
     ws_Room.Range("E47").Value = BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] / 100
 
 
-# 
-def Meal_info(wb, start_day):
-    # Sync data to BQT Worksheet
+# Transfer data to excel BQT Worksheet
+def Meal_info(wb, start_day, BK_tmp, Event_tmp):
+    # Select BQT Worksheet
     ws_BQT = wb.Worksheets('B. BQT')
     
     # F&B minimum
@@ -195,7 +207,7 @@ def Meal_info(wb, start_day):
     # TODO: Rebate
     
     
-    # Sync data to BQT Meal Worksheet
+    # Select BQT Meal Worksheet
     ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
     # exclude all package event
     Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
@@ -221,9 +233,9 @@ def Meal_info(wb, start_day):
         ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + beverage.shape[1] - 1)).Value = beverage.values
 
 
-#
-def Entertainment_and_CE_info(wb):
-    # Sync data to Entertainment Worksheet
+# Transfer data to excel Entertainment and C&E Worksheet
+def Entertainment_and_CE_info(wb, Event_tmp):
+    # Select Entertainment Worksheet
     ws_entertain = wb.Worksheets('D. Entertainment')
     
     # Arena Rental
@@ -237,7 +249,7 @@ def Entertainment_and_CE_info(wb):
     ws_entertain.Range("B5").Value = parisian_theatre
 
 
-    # Sync data to C&E Worksheet
+    # Select C&E Worksheet
     ws_CE = wb.Worksheets('C. C&E')
     
     # Hall Rental
@@ -260,15 +272,19 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     start_et = Event_tmp['Start'].min()
     start_day = min(start_rm, start_et)
     
-    Booking_information(wb)
-    
-    Room_info(wb, start_day)
-    
-    Meal_info(wb, start_day)
-    
-    Entertainment_and_CE_info(wb)
+    # Run Booking_information function
+    Booking_information(wb, BK_tmp)
+    # Run Room_info function
+    if RoomN_tmp.empty is False:
+        Room_info(wb, start_day, RoomN_tmp)
+    # Run Meal_info and Entertainment_and_CE_info function
+    if Event_tmp.empty is False:
+        # Run Meal_info function
+        Meal_info(wb, start_day, BK_tmp, Event_tmp)
+        # Run Entertainment_and_CE_info function
+        Entertainment_and_CE_info(wb, Event_tmp)
 
-
+    # excel filename format
     excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsx'
     
     # Save path for debugging
