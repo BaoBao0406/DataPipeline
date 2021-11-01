@@ -20,7 +20,7 @@ def convert_to_excel(data, filename):
 
 col = table.iloc[0]['Booking ID']
 # Testing booking with BK_ID directly
-# BK_ID_no = ''
+col = '005686'
 BK_ID_no = str(int(col)).zfill(6)
 
 
@@ -87,16 +87,14 @@ from win32com.client import constants
 
 # Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax By day
 def BQT_meal_table(meal_tmp, start_day):
-    meal_tmp = meal_tmp[['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']]
+    meal_tmp = meal_tmp[['Start', 'Total Revenue', 'Agreed']]
     first_day_event = meal_tmp['Start'].min()
     # Check if 
     if first_day_event != start_day:
         for d in range((first_day_event - start_day).days):
-            add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0, 0]
-            meal_tmp = meal_tmp.append(pd.DataFrame([add_row], columns=['Start', 'Food Revenue', 'Outlet Revenue', 'Agreed']),ignore_index=True)
-    # Add up Food and Outlet Revenue for Total Revenue
-    meal_tmp['Total Revenue'] = meal_tmp['Food Revenue'] + meal_tmp['Outlet Revenue']
-    # 
+            add_row = [pd.to_datetime(start_day) + timedelta(days=d), 0, 0]
+            meal_tmp = meal_tmp.append(pd.DataFrame([add_row], columns=['Start', 'Total Revenue', 'Agreed']),ignore_index=True)
+    #
     meal_tmp = meal_tmp.groupby('Start')[['Agreed', 'Total Revenue']].sum()
     # Calculation for Revenue per pax column
     meal_tmp['Revenue per pax'] = (meal_tmp['Total Revenue'] / meal_tmp['Agreed']).fillna(0)
@@ -138,7 +136,7 @@ def Room_type_table(RoomN_tb_tmp, start_day):
                 add_row = [pd.to_datetime(start_day) + timedelta(days=d), str(rm), 0, 0]
                 RoomN_tb_tmp = RoomN_tb_tmp.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
         else:
-            add_row = [pd.to_datetime(start_day), str(rm), 0, 0]
+            add_row = [start_day, str(rm), 0, 0]
             RoomN_tb_tmp = RoomN_tb_tmp.append(pd.DataFrame([add_row], columns=['Pattern Date', 'Type', 'Room', 'Rate']),ignore_index=True)
     # Calculate Revenue for each line in room data
     RoomN_tb_tmp['Revenue'] = RoomN_tb_tmp['Room'] * RoomN_tb_tmp['Rate']
@@ -194,7 +192,8 @@ def Room_info(wb, start_day, RoomN_tmp):
         RoomN_conrad = Room_type_table(RoomN_conrad, start_day)
         ws_Room.Range(ws_Room.Cells(17,2), ws_Room.Cells(18, 2 + RoomN_conrad.shape[1] - 1)).Value = RoomN_conrad.values
     # Commission
-    ws_Room.Range("E47").Value = BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] / 100
+    if BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] != None:
+        ws_Room.Range("E47").Value = BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] / 100
 
 
 # Transfer data to excel BQT Worksheet
@@ -209,8 +208,14 @@ def Meal_info(wb, start_day, BK_tmp, Event_tmp):
     
     # Select BQT Meal Worksheet
     ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
+    # replace blank value in Event Classification
+    Event_tmp['Event Classification'].replace(np.nan, 'Empty', inplace=True)
     # exclude all package event
     Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
+    # Combine Food Revenue and Outlet Revenue
+    Event_wo_package['Total Revenue'] = Event_wo_package['Food Revenue'] + Event_wo_package['Outlet Revenue']
+    # exclude all event with zero Total Revenue
+    Event_wo_package = Event_wo_package[Event_wo_package['Total Revenue'] != 0.0]
     # Breakfast table
     breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
     if breakfast.empty is False:
@@ -264,8 +269,11 @@ def Entertainment_and_CE_info(wb, Event_tmp):
 # main function for proforma_sync
 def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     
+    # BP_file = 'I:\\10-Sales\\+Contracts (Expiration + 10Y, Internal)\\2021\\Proforma P&L\\'
+    BP_file = save_path
+    
     excel = win32.DispatchEx("Excel.Application")
-    wb = excel.Workbooks.Open(save_path + 'Booking Proforma Template_unprotected.xlsx', None, True)
+    wb = excel.Workbooks.Open(BP_file + 'Booking Proforma Template_unprotected.xlsx', None, True)
     
     # Calculate the actual start day for either room or event
     start_rm = RoomN_tmp['Pattern Date'].min()
@@ -288,7 +296,6 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsx'
     
     # Save path for debugging
-    # save_path = 'I:\\10-Sales\\+Contracts (Expiration + 10Y, Internal)\\2021\\Proforma P&L\\'
     wb.SaveAs(save_path + excelfile_name)
     wb.Close(True)
 
