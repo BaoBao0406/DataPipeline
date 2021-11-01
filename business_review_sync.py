@@ -38,7 +38,7 @@ user = user.set_index('Id')['Name'].to_dict()
 
 
 # extract booking info
-BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'yyyy-MM-dd') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'yyyy-MM-dd') AS DepartureDate, BK.nihrm__CommissionPercentage__c, BK.nihrm__Property__c, BK.nihrm__FoodBeverageMinimum__c, ac.Name, ag.Name, BK.End_User_Region__c, BK.End_User_SIC__c, BK.nihrm__BookingTypeName__c \
+BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'yyyy-MM-dd') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'yyyy-MM-dd') AS DepartureDate, BK.nihrm__CommissionPercentage__c, BK.Percentage_of_Attrition__c, BK.nihrm__Property__c, BK.nihrm__FoodBeverageMinimum__c, ac.Name AS ACName, ag.Name AS AGName, BK.End_User_Region__c, BK.End_User_SIC__c, BK.nihrm__BookingTypeName__c \
                       FROM dbo.nihrm__Booking__c AS BK \
                           LEFT JOIN dbo.Account AS ac \
                               ON BK.nihrm__Account__c = ac.Id \
@@ -50,12 +50,13 @@ BK_ID = BK_tmp.iloc[0]['Id']
 
 
 # extract event info
-Event_tmp = pd.read_sql("SELECT ET.Name, FR.Name, ET.nihrm__EventClassificationName__c, FORMAT(ET.nihrm__StartDate__c, 'yyyy/MM/dd') AS Start, ET.nihrm__AgreedEventAttendance__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastRevenue1__c, ET.nihrm__ForecastAverageCheck9__c, ET.nihrm__ForecastAverageCheckFactor9__c, ET.nihrm__ForecastRevenue9__c, ET.nihrm__ForecastAverageCheck2__c, ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c \
+Event_tmp = pd.read_sql("SELECT ET.Name, FR.Name, ET.nihrm__EventClassificationName__c, FORMAT(ET.nihrm__StartDate__c, 'yyyy/MM/dd') AS Start, ET.nihrm__AgreedEventAttendance__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastRevenue1__c, ET.nihrm__ForecastAverageCheck9__c, ET.nihrm__ForecastAverageCheckFactor9__c, ET.nihrm__ForecastRevenue9__c, ET.nihrm__ForecastAverageCheck2__c, \
+                                ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c, ET.nihrm__StartTime24Hour__c, ET.nihrm__EndTime24Hour__c, ET.nihrm__FunctionRoomSetupName__c, ET.nihrm__FunctionRoomOption__c \
                          FROM dbo.nihrm__BookingEvent__c AS ET \
                          INNER JOIN dbo.nihrm__FunctionRoom__c AS FR \
                              ON ET.nihrm__FunctionRoom__c = FR.Id \
                          WHERE ET.nihrm__Booking__c = '" + BK_ID + "'", conn)
-Event_tmp.columns = ['Event name', 'Function Space', 'Event Classification', 'Start', 'Agreed', 'Food Check', 'Food Factor', 'Food Revenue', 'Outlet Check', 'Outlet Factor', 'Outlet Revenue', 'Beverage Check', 'Beverage Factor', 'Beverage Revenue', 'Rental Revenue', 'AV Revenue']
+Event_tmp.columns = ['Event name', 'Function Space', 'Event Classification', 'Start', 'Agreed', 'Food Check', 'Food Factor', 'Food Revenue', 'Outlet Check', 'Outlet Factor', 'Outlet Revenue', 'Beverage Check', 'Beverage Factor', 'Beverage Revenue', 'Rental Revenue', 'AV Revenue', 'Start Time', 'End Time', 'Setup', 'Function Space Option']
 Event_tmp['Start'] = pd.to_datetime(Event_tmp['Start']).dt.date
 
 
@@ -94,32 +95,40 @@ wb = excel.Workbooks.Open(save_path + 'BR Form_Macao_6.0.3.5.xlsm', None, True)
 # Rooms Worksheet
 ws_Rooms = wb.Worksheets('Rooms')
 
+# Rooms Worksheet Part 1
 # Post As
 ws_Rooms.Range("B2").Value = BK_tmp.iloc[0]['Name']
 # Account Name
-ws_Rooms.Range("B4").Value = BK_tmp.iloc[0]['Name']
+ws_Rooms.Range("B4").Value = BK_tmp.iloc[0]['ACName']
 # Agency Name
-ws_Rooms.Range("B5").Value = BK_tmp.iloc[0]['Name']
+ws_Rooms.Range("B5").Value = BK_tmp.iloc[0]['AGName']
 # End User Region
-ws_Rooms.Range("B6").Value = BK_tmp.iloc[0]['Name']
+ws_Rooms.Range("B6").Value = BK_tmp.iloc[0]['End_User_Region__c']
 # Regional Manager
 ws_Rooms.Range("J2").Value = BK_tmp.iloc[0]['Name']
 # Booking Owner
-ws_Rooms.Range("J3").Value = BK_tmp.iloc[0]['Name']
+ws_Rooms.Range("J3").Value = BK_tmp.iloc[0]['OwnerId']
 # Booking Type
-ws_Rooms.Range("J4").Value = BK_tmp.iloc[0]['Name']
+ws_Rooms.Range("J4").Value = BK_tmp.iloc[0]['nihrm__BookingTypeName__c']
 # End User Industry
-ws_Rooms.Range("J6").Value = BK_tmp.iloc[0]['Name']
-# Commission
-ws_Rooms.Range("O6").Value = BK_tmp.iloc[0]['Name']
-# Attrition
-ws_Rooms.Range("O7").Value = BK_tmp.iloc[0]['Name']
+ws_Rooms.Range("J6").Value = BK_tmp.iloc[0]['End_User_SIC__c']
+# TODO: Commission
+ws_Rooms.Range("O6").Value = BK_tmp.iloc[0]['nihrm__CommissionPercentage__c']
+# TODO: Attrition
+ws_Rooms.Range("O7").Value = BK_tmp.iloc[0]['Percentage_of_Attrition__c']
+
+# Rooms Worksheet Part 2
+# Status
+ws_Rooms.Range("B14").Value = 'Prospect'
+# Arrival Date
+ws_Rooms.Range("B15").Value = BK_tmp.iloc[0]['ArrivalDate']
 
 
 # Meeting Space Worksheet
 ws_Events = wb.Worksheets('Meeting Space')
 
-
+Event_tmp = Event_tmp[['Start', 'Start Time', 'End Time', 'Event Classification', 'Setup', 'Function Space', 'Rental Revenue', 'Agreed', 'Function Space Option']]
+convert_to_excel(Event_tmp, 'BR_Event')
 
 excelfile_name = 'BR_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsm'
 
