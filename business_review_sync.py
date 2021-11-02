@@ -85,6 +85,7 @@ Room_rate['variable'].replace('Rate', '', inplace=True, regex=True)
 RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'variable'])
 RoomN_tmp['Pattern Date'] = pd.to_datetime(RoomN_tmp['Pattern Date']).dt.date
 
+
 #################################################
 
 import win32com.client as win32
@@ -126,10 +127,10 @@ if BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] != None:
 if BK_tmp.iloc[0]['Percentage_of_Attrition__c'] != None:
     ws_Rooms.Range("O7").Value = BK_tmp.iloc[0]['Percentage_of_Attrition__c'] / 100
 # Booking ID
-property_list = {'Venetian': '2', 'Conrad': '3', 'Londoner': '4', 'Parisian': '5'}
-for d in property_list.keys():
+property_id_list = {'Venetian': '2', 'Conrad': '3', 'Londoner': '4', 'Parisian': '5'}
+for d in property_id_list.keys():
     if d in BK_tmp.iloc[0]['nihrm__Property__c']:
-        ws_Rooms.Range("O" + property_list[d]).Value = BK_tmp.iloc[0]['Booking_ID_Number__c']
+        ws_Rooms.Range("O" + property_id_list[d]).Value = BK_tmp.iloc[0]['Booking_ID_Number__c']
 
 # Rooms Worksheet Part 2
 # Status
@@ -142,10 +143,10 @@ ws_Rooms.Range("B16").Value = (pd.to_datetime(BK_tmp.iloc[0]['DepartureDate']) -
 ws_Rooms.Range("B17").Value = 'New Group'
 
 # F&B minimum (Londoner does not exist in BR yet)
-property_list = {'Venetian': '28', 'Conrad': '38', 'Parisian': '46'}
-for d in property_list.keys():
+property_FB_list = {'Venetian': '28', 'Conrad': '38', 'Parisian': '46'}
+for d in property_FB_list.keys():
     if d in BK_tmp.iloc[0]['nihrm__Property__c']:
-        ws_Rooms.Range("O" + property_list[d]).Value = BK_tmp.iloc[0]['nihrm__FoodBeverageMinimum__c']
+        ws_Rooms.Range("B" + property_FB_list[d]).Value = BK_tmp.iloc[0]['nihrm__FoodBeverageMinimum__c']
 
 # Food and Beverage Part
 venetian_rest = ['Bambu', 'Jiang Nan', 'Imperial House', 'Golden Peacock', 'North', 'Portofino']
@@ -158,6 +159,28 @@ parisian_rest = ['Market Bistro', 'Le Buffet', 'Brasserie', 'Lotus Palace', 'La 
 # Meeting Space Worksheet
 ws_Events = wb.Worksheets('Meeting Space')
 
+# Peak Area and Peak day
+if Event_tmp.empty is False:
+    property_et_list = {'Venetian': 8, 'Conrad': 9, 'Londoner': 9, 'Parisian': 10}
+    Events_tb_tmp = Event_tmp[['Property', 'Start', 'Agreed', 'Area']]
+    for d in property_et_list.keys():
+        Events_loop_tmp = Events_tb_tmp[Events_tb_tmp['Property'].str.contains(d)].reset_index(drop=True)
+        if Events_loop_tmp.empty is False:
+            index = Events_loop_tmp['Area'].idxmax()
+            ws_Events.Cells(18, property_et_list[d]).Value = str(Events_loop_tmp.iloc[index]['Start'])
+            ws_Events.Cells(19, property_et_list[d]).Value = Events_loop_tmp.iloc[index]['Area']
+
+# Peak Room day
+if RoomN_tmp.empty is False:
+    property_et_list = {'Venetian': 8, 'Conrad': 9, 'Londoner': 9, 'Parisian': 10}
+    Room_tb_tmp = RoomN_tmp[['Property', 'Room']]
+    for d in property_et_list.keys():
+        Room_loop_tmp = Room_tb_tmp[Room_tb_tmp['Property'].str.contains(d)].reset_index(drop=True)
+        if Room_loop_tmp.empty is False:
+            index = Room_loop_tmp['Room'].idxmax()
+            ws_Events.Cells(20, property_et_list[d]).Value = Room_loop_tmp.iloc[index]['Room']
+            
+    
 # Event table
 if Event_tmp.empty is False:
     Events_tb_tmp = Event_tmp[['Start', 'Start Time', 'End Time', 'Event Classification', 'Setup', 'Function Space', 'Rental Revenue', 'Agreed', 'Function Space Option']]
