@@ -63,26 +63,28 @@ Event_tmp['Start'] = pd.to_datetime(Event_tmp['Start']).dt.date
 
 
 
-RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'yyyy/MM/dd') AS PatternDate, \
+RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'yyyy/MM/dd') AS PatternDate, RoomB.Name, \
                              RoomN.nihrm__BlockedRooms1__c, RoomN.nihrm__BlockedRooms2__c, RoomN.nihrm__BlockedRooms3__c, RoomN.nihrm__BlockedRooms4__c, \
                              RoomN.nihrm__BlockedRate1__c, RoomN.nihrm__BlockedRate2__c, RoomN.nihrm__BlockedRate3__c, RoomN.nihrm__BlockedRate4__c \
                          FROM dbo.nihrm__BookingRoomNight__c AS RoomN \
+                         INNER JOIN dbo.nihrm__BookingRoomBlock__c AS RoomB \
+                             ON RoomN.nihrm__RoomBlock__c = RoomB.Id \
                          INNER JOIN dbo.nihrm__GuestroomType__c AS GS \
                              ON RoomN.nihrm__GuestroomType__c = GS.Id \
                          WHERE RoomN.nihrm__Booking__c = '" + BK_ID + "'", conn)
-RoomN_tmp.columns = ['Property', 'Room Type', 'Pattern Date', 'Room1', 'Room2', 'Room3', 'Room4', 'Rate1', 'Rate2', 'Rate3', 'Rate4']
+RoomN_tmp.columns = ['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'Room1', 'Room2', 'Room3', 'Room4', 'Rate1', 'Rate2', 'Rate3', 'Rate4']
 
 # TODO: Find a better solution to fix this
 # Melt Room Night number (4 Occupancy) to columns
-Room_no = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Room1', 'Room2', 'Room3', 'Room4']]
-Room_no = pd.melt(Room_no, id_vars=['Property', 'Room Type', 'Pattern Date'], value_name='Room')
+Room_no = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'Room1', 'Room2', 'Room3', 'Room4']]
+Room_no = pd.melt(Room_no, id_vars=['Property', 'Room Type', 'Pattern Date', 'Room Block Name'], value_name='Room')
 Room_no['variable'].replace('Room', '', inplace=True, regex=True)
 # Melt Room Rate (4 Occupancy) to columns
-Room_rate = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Rate1', 'Rate2', 'Rate3', 'Rate4']]
-Room_rate = pd.melt(Room_rate, id_vars=['Property', 'Room Type', 'Pattern Date'], value_name='Rate')
+Room_rate = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Room Block Name','Rate1', 'Rate2', 'Rate3', 'Rate4']]
+Room_rate = pd.melt(Room_rate, id_vars=['Property', 'Room Type', 'Pattern Date', 'Room Block Name'], value_name='Rate')
 Room_rate['variable'].replace('Rate', '', inplace=True, regex=True)
 # Join Room Night and Room Rate
-RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'variable'])
+RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'variable'])
 RoomN_tmp['Pattern Date'] = pd.to_datetime(RoomN_tmp['Pattern Date']).dt.date
 
 
@@ -129,7 +131,9 @@ if BK_tmp.iloc[0]['Percentage_of_Attrition__c'] != None:
 # Booking ID
 property_id_list = {'Venetian': '2', 'Conrad': '3', 'Londoner': '4', 'Parisian': '5'}
 for d in property_id_list.keys():
+    # Loop for all property in property_id_list list
     if d in BK_tmp.iloc[0]['nihrm__Property__c']:
+        # Primary property by ID
         ws_Rooms.Range("O" + property_id_list[d]).Value = BK_tmp.iloc[0]['Booking_ID_Number__c']
 
 # Rooms Worksheet Part 2
@@ -145,45 +149,99 @@ ws_Rooms.Range("B17").Value = 'New Group'
 # F&B minimum (Londoner does not exist in BR yet)
 property_FB_list = {'Venetian': '28', 'Conrad': '38', 'Parisian': '46'}
 for d in property_FB_list.keys():
+    # Loop for all property in property_FB_list list
     if d in BK_tmp.iloc[0]['nihrm__Property__c']:
+        # F&B Minimum by property
         ws_Rooms.Range("B" + property_FB_list[d]).Value = BK_tmp.iloc[0]['nihrm__FoodBeverageMinimum__c']
 
+
+def event_rest_revenue(Event_tmp_rest, rest_et_list):
+    for rest in rest_et_list.keys():
+        tmp = Event_tmp_rest[Event_tmp_rest['Function Space'].str.contains(rest)]
+        ws_Rooms.Range("B" + str(rest_et_list[rest])).Value = tmp['Total F&B Revenue'].sum()
+
 # Food and Beverage Part
-venetian_rest = ['Bambu', 'Jiang Nan', 'Imperial House', 'Golden Peacock', 'North', 'Portofino']
+Event_tmp_rest = Event_tmp[['Function Space', 'Event Classification', 'Food Revenue', 'Outlet Revenue', 'Beverage Revenue']]
+Event_tmp_rest['Total F&B Revenue'] = Event_tmp_rest['Food Revenue'] + Event_tmp_rest['Outlet Revenue'] + Event_tmp_rest['Beverage Revenue']
+# Exclude Package and Breakfast classification type
+Event_tmp_rest = Event_tmp_rest[~Event_tmp_rest['Event Classification'].str.contains('Package|Breakfast')]
+# Venetian restaurant list and excel cell
+venetian_rest = {'Bambu': 29, 'Jiang Nan': 30, 'Imperial House': 31, 'Golden Peacock': 32, 'North': 33, 'Portofino': 34}
+# Run function for Venetian rest revenue
+event_rest_revenue(Event_tmp_rest, venetian_rest)
+# Conrad restaurant list and excel cell
+conrad_rest = {'Churchill': 39, 'Southern Kitchen': 42}
+# Run function for Conrad rest revenue
+event_rest_revenue(Event_tmp_rest, conrad_rest)
+# Conrad restaurant list and excel cell
+parisian_rest = {'Market Bistro': 47, 'Le Buffet': 48, 'Brasserie': 49, 'Lotus Palace': 50, 'La Chine': 51}
+# Run function for Parisian rest revenue
+event_rest_revenue(Event_tmp_rest, parisian_rest)
 
-conrad_rest = ['Churchill', 'Southern Kitchen']
 
-parisian_rest = ['Market Bistro', 'Le Buffet', 'Brasserie', 'Lotus Palace', 'La Chine']
+# Room part
+
+# Room number
+property_rm_list = ['Venetian', 'Conrad', 'Londoner', 'Parisian']
+RoomN_rm_tmp = RoomN_tmp[RoomN_tmp['Property'].str.contains('Venetian')]
+# TODO: replace BR Room type
+# df.set_index('id')['value'].to_dict()
+# TODO: if inlude bbf add breakfast to room rate
+RoomN_repeat_tb = RoomN_rm_tmp[['Room Block Name', 'Property', 'Room Type']]
+RoomN_repeat_tb = RoomN_repeat_tb.drop_duplicates(subset='Room Type', keep='first')
+
+RoomN_rm_tmp = RoomN_rm_tmp.groupby(['Room Block Name', 'Property', 'Room Type', 'Pattern Date'])['Room'].sum()
+RoomN_rm_tmp = RoomN_rm_tmp.unstack()
+convert_to_excel(RoomN_rm_tmp, 'RoomT')
+
+
+
+
+
+# Room rate
+RoomN_rm_tmp = RoomN_tmp.groupby(['Room Block Name', 'Property', 'Room Type', 'Pattern Date'])['Rate'].sum()
+RoomN_rm_tmp = RoomN_rm_tmp.unstack()
 
 
 # Meeting Space Worksheet
 ws_Events = wb.Worksheets('Meeting Space')
 
+# Column index for excel input by properties
+property_et_list = {'Venetian': 8, 'Conrad': 9, 'Londoner': 9, 'Parisian': 10}
+
 # Peak Area and Peak day
 if Event_tmp.empty is False:
-    property_et_list = {'Venetian': 8, 'Conrad': 9, 'Londoner': 9, 'Parisian': 10}
     Events_tb_tmp = Event_tmp[['Property', 'Start', 'Agreed', 'Area']]
+    Events_tb_tmp.sort_values(by='Start', inplace=True)
+    # Loop for all property in property_et_list list
     for d in property_et_list.keys():
+        # Filter event by property
         Events_loop_tmp = Events_tb_tmp[Events_tb_tmp['Property'].str.contains(d)].reset_index(drop=True)
         if Events_loop_tmp.empty is False:
+            # Find the row index number for max Area
             index = Events_loop_tmp['Area'].idxmax()
+            # Peak meeting date by property
             ws_Events.Cells(18, property_et_list[d]).Value = str(Events_loop_tmp.iloc[index]['Start'])
+            # Peak SQM by property
             ws_Events.Cells(19, property_et_list[d]).Value = Events_loop_tmp.iloc[index]['Area']
 
 # Peak Room day
 if RoomN_tmp.empty is False:
-    property_et_list = {'Venetian': 8, 'Conrad': 9, 'Londoner': 9, 'Parisian': 10}
     Room_tb_tmp = RoomN_tmp[['Property', 'Room']]
+    # Loop for all property in property_et_list list
     for d in property_et_list.keys():
         Room_loop_tmp = Room_tb_tmp[Room_tb_tmp['Property'].str.contains(d)].reset_index(drop=True)
         if Room_loop_tmp.empty is False:
+            # Find the row index number for Room
             index = Room_loop_tmp['Room'].idxmax()
+            # Peak room by property
             ws_Events.Cells(20, property_et_list[d]).Value = Room_loop_tmp.iloc[index]['Room']
             
     
 # Event table
 if Event_tmp.empty is False:
     Events_tb_tmp = Event_tmp[['Start', 'Start Time', 'End Time', 'Event Classification', 'Setup', 'Function Space', 'Rental Revenue', 'Agreed', 'Function Space Option']]
+    # Replace NaN value for Agreed and Rental Revenue
     Events_tb_tmp['Agreed'] = Events_tb_tmp['Agreed'].replace(np.NaN, 0, regex=True)
     Events_tb_tmp['Rental Revenue'] = Events_tb_tmp['Rental Revenue'].replace(np.NaN, 0, regex=True)
     Events_tb_tmp.sort_values(by='Start', inplace=True)
