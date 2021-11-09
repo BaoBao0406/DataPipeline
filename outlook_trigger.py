@@ -8,11 +8,8 @@ import datetime, os.path, re, io
 import pandas as pd
 
 
-# Path for the Attachment to be saved
-AttachPath = 'I:\\10-Sales\\Personal Folder\\Admin & Assistant Team\\Patrick Leong\\Python Code\\DataPipeline\\Testing\\'
-
 # Keyword to search for email subject
-msgKeyWord = re.compile(r'booking check')
+msgKeyWord = re.compile(r'booking dataflow')
 
 
 # Loop for all email within the Date Range with the keyword
@@ -22,7 +19,7 @@ def search_all_mail(filename_list, msgs):
         # Search for keywords in email subject
         msgSearch = msgKeyWord.search((msg.Subject).lower())
         if (msgSearch == None) is False:
-            msg_name = msg.Subject + '.msg'
+            msg_name = re.sub('[^a-zA-Z0-9 \n\.]', '', msg.Subject) + '.msg'
             if msg_name not in filename_list:
                 MsgToMove.append(msg)
                 msgSearch = 'None'
@@ -33,6 +30,8 @@ def extract_email_table(msg):
         table_tmp = pd.read_html(msg.HTMLBody, header=0, index_col=0)[0].T
         # Convert to csv to remove the index column then convert back to DatdFrame
         table_tmp = pd.read_csv(io.StringIO(table_tmp.to_csv(index=False)), sep=",")
+        # TODO: Add function to debug
+        
         return table_tmp
     
 # Function to save the unprocess booking email to folder
@@ -40,7 +39,7 @@ def save_email(msg):
     # replace all the special character in email Subject
     msg_filename = re.sub('[^a-zA-Z0-9 \n\.]', '', msg.Subject) + '.msg'
     # Save the email to folder
-    msg.SaveAs(AttachPath + msg_filename)
+    msg.SaveAs(os.path.abspath(os.getcwd()) + '\\Email\\' + msg_filename)
 
 
 # Function to Move email to specific folder and save to csv file
@@ -76,8 +75,12 @@ def outlook_trigger():
     
     if msgs:
         # Get all the previous filename save (already process emails)
-        filename_list = os.listdir(AttachPath)
+        filename_list = os.listdir(os.path.abspath(os.getcwd()) + '\\Email\\')
         search_all_mail(filename_list, msgs)
         
         if MsgToMove:
             process_save_email_2_csv()
+
+
+# Testing purpose
+#outlook_trigger()
