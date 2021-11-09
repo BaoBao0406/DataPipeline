@@ -58,10 +58,12 @@ def RoomN_sql_data(BK_ID, conn):
 def Event_sql_data(BK_ID, conn):
     # Event SQL
     Event_tmp = pd.read_sql("SELECT ET.nihrm__Property__c, ET.Name, FR.Name, ET.nihrm__EventClassificationName__c, FORMAT(ET.nihrm__StartDate__c, 'yyyy/MM/dd') AS Start, ET.nihrm__AgreedEventAttendance__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastRevenue1__c, ET.nihrm__ForecastAverageCheck9__c, ET.nihrm__ForecastAverageCheckFactor9__c, ET.nihrm__ForecastRevenue9__c, ET.nihrm__ForecastAverageCheck2__c, \
-                                    ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c, ET.nihrm__StartTime24Hour__c, ET.nihrm__EndTime24Hour__c, ET.nihrm__FunctionRoomSetupName__c, ET.nihrm__FunctionRoomOption__c, FR.nihrm__Area__c \
+                                    ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c, ET.nihrm__StartTime24Hour__c, ET.nihrm__EndTime24Hour__c, ET.nihrm__FunctionRoomSetupName__c, FRO.Name, FR.nihrm__Area__c \
                              FROM dbo.nihrm__BookingEvent__c AS ET \
                              INNER JOIN dbo.nihrm__FunctionRoom__c AS FR \
                                  ON ET.nihrm__FunctionRoom__c = FR.Id \
+                             LEFT JOIN  dbo.nihrm__FunctionRoom__c AS FRO \
+                                 ON ET.nihrm__FunctionRoomOption__c = FRO.Id\
                              WHERE ET.nihrm__Booking__c = '" + BK_ID + "'", conn)
     Event_tmp.columns = ['Property', 'Event name', 'Function Space', 'Event Classification', 'Start', 'Agreed', 'Food Check', 'Food Factor', 'Food Revenue', 'Outlet Check', 'Outlet Factor', 'Outlet Revenue', 'Beverage Check', 'Beverage Factor', 'Beverage Revenue', 'Rental Revenue', 'AV Revenue', 'Start Time', 'End Time', 'Setup', 'Function Space Option', 'Area']
     Event_tmp['Start'] = pd.to_datetime(Event_tmp['Start']).dt.date
