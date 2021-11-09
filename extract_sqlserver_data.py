@@ -5,13 +5,6 @@ import pyodbc
 import pandas as pd
 import datetime, os.path
 
-save_path = 'I:\\10-Sales\\Personal Folder\\Admin & Assistant Team\\Patrick Leong\\Python Code\\DataPipeline\\'
-
-
-# Convert data to excel format
-def convert_to_excel(data, filename):
-    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1', index=False)
-
 
 # extract booking info
 def BK_sql_data(BK_ID_no, user, conn):
@@ -109,7 +102,15 @@ def extract_sqlserver_data(table):
 
 
 
+
 # Data Checking
+
+# Testing Purpose
+#save_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
+# Convert data to excel format
+#def convert_to_excel(data, filename):
+#    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1', index=False)
+
 #BK_tmp, RoomN_tmp, Event_tmp = extract_sqlserver_data()
 #
 #BK = 'BKinfo'
