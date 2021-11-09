@@ -1,88 +1,12 @@
 #! python3
 # proforma_sync.py - 
 
-#################################################
-import pyodbc
-import pandas as pd
-import os.path
-import numpy as np
-from datetime import timedelta
-
-
-save_path = 'I:\\10-Sales\\Personal Folder\\Admin & Assistant Team\\Patrick Leong\\Python Code\\DataPipeline\\'
-
-table = pd.read_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
-
-
-# Convert data to excel format
-def convert_to_excel(data, filename):
-    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1')
-
-col = table.iloc[0]['Booking ID']
-# Testing booking with BK_ID directly
-col = '005686'
-BK_ID_no = str(int(col)).zfill(6)
-
-
-conn = pyodbc.connect('Driver={SQL Server};'
-                      'Server=VOPPSCLDBN01\VOPPSCLDBI01;'
-                      'Database=SalesForce;'
-                      'Trusted_Connection=yes;')
-
-
-# FDC User ID and Name list
-user = pd.read_sql('SELECT DISTINCT(Id), Name \
-                    FROM dbo.[User]', conn)
-user = user.set_index('Id')['Name'].to_dict()
-
-
-
-# extract booking info
-BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'yyyy-MM-dd') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'yyyy-MM-dd') AS DepartureDate, BK.nihrm__CommissionPercentage__c, BK.nihrm__Property__c, BK.nihrm__FoodBeverageMinimum__c \
-                      FROM dbo.nihrm__Booking__c AS BK \
-                      WHERE BK.Booking_ID_Number__c = " + BK_ID_no, conn)
-BK_tmp['OwnerId'].replace(user, inplace=True)
-BK_ID = BK_tmp.iloc[0]['Id']
-
-
-# extract event info
-Event_tmp = pd.read_sql("SELECT ET.Name, FR.Name, ET.nihrm__EventClassificationName__c, FORMAT(ET.nihrm__StartDate__c, 'yyyy/MM/dd') AS Start, ET.nihrm__AgreedEventAttendance__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastRevenue1__c, ET.nihrm__ForecastAverageCheck9__c, ET.nihrm__ForecastAverageCheckFactor9__c, ET.nihrm__ForecastRevenue9__c, ET.nihrm__ForecastAverageCheck2__c, ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c \
-                         FROM dbo.nihrm__BookingEvent__c AS ET \
-                         INNER JOIN dbo.nihrm__FunctionRoom__c AS FR \
-                             ON ET.nihrm__FunctionRoom__c = FR.Id \
-                         WHERE ET.nihrm__Booking__c = '" + BK_ID + "'", conn)
-Event_tmp.columns = ['Event name', 'Function Space', 'Event Classification', 'Start', 'Agreed', 'Food Check', 'Food Factor', 'Food Revenue', 'Outlet Check', 'Outlet Factor', 'Outlet Revenue', 'Beverage Check', 'Beverage Factor', 'Beverage Revenue', 'Rental Revenue', 'AV Revenue']
-Event_tmp['Start'] = pd.to_datetime(Event_tmp['Start']).dt.date
-
-
-
-RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'yyyy/MM/dd') AS PatternDate, \
-                             RoomN.nihrm__BlockedRooms1__c, RoomN.nihrm__BlockedRooms2__c, RoomN.nihrm__BlockedRooms3__c, RoomN.nihrm__BlockedRooms4__c, \
-                             RoomN.nihrm__BlockedRate1__c, RoomN.nihrm__BlockedRate2__c, RoomN.nihrm__BlockedRate3__c, RoomN.nihrm__BlockedRate4__c \
-                         FROM dbo.nihrm__BookingRoomNight__c AS RoomN \
-                         INNER JOIN dbo.nihrm__GuestroomType__c AS GS \
-                             ON RoomN.nihrm__GuestroomType__c = GS.Id \
-                         WHERE RoomN.nihrm__Booking__c = '" + BK_ID + "'", conn)
-RoomN_tmp.columns = ['Property', 'Room Type', 'Pattern Date', 'Room1', 'Room2', 'Room3', 'Room4', 'Rate1', 'Rate2', 'Rate3', 'Rate4']
-
-# TODO: Find a better solution to fix this
-# Melt Room Night number (4 Occupancy) to columns
-Room_no = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Room1', 'Room2', 'Room3', 'Room4']]
-Room_no = pd.melt(Room_no, id_vars=['Property', 'Room Type', 'Pattern Date'], value_name='Room')
-Room_no['variable'].replace('Room', '', inplace=True, regex=True)
-# Melt Room Rate (4 Occupancy) to columns
-Room_rate = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Rate1', 'Rate2', 'Rate3', 'Rate4']]
-Room_rate = pd.melt(Room_rate, id_vars=['Property', 'Room Type', 'Pattern Date'], value_name='Rate')
-Room_rate['variable'].replace('Rate', '', inplace=True, regex=True)
-# Join Room Night and Room Rate
-RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'variable'])
-RoomN_tmp['Pattern Date'] = pd.to_datetime(RoomN_tmp['Pattern Date']).dt.date
-
-#################################################
-
-
 import win32com.client as win32
 from win32com.client import constants
+from datetime import timedelta
+import numpy as np
+import pandas as pd
+import os.path
 
 
 # Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax By day
@@ -163,7 +87,7 @@ def Booking_information(wb, BK_tmp):
 
 
 # Transfer data to excel Room Worksheet
-def Room_info(wb, start_day, RoomN_tmp):
+def Room_info(wb, start_day, BK_tmp, RoomN_tmp):
     # Select Room Worksheet
     ws_Room = wb.Worksheets('A. Room')
     
@@ -270,21 +194,27 @@ def Entertainment_and_CE_info(wb, Event_tmp):
 def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     
     # BP_file = 'I:\\10-Sales\\+Contracts (Expiration + 10Y, Internal)\\2021\\Proforma P&L\\'
-    BP_file = save_path
+    BP_file = os.path.abspath(os.getcwd()) + '\\Testing files\\'
     
     excel = win32.DispatchEx("Excel.Application")
     wb = excel.Workbooks.Open(BP_file + 'Booking Proforma Template_unprotected.xlsx', None, True)
     
+    # Run Booking_information function
+    Booking_information(wb, BK_tmp)
+    
     # Calculate the actual start day for either room or event
     start_rm = RoomN_tmp['Pattern Date'].min()
     start_et = Event_tmp['Start'].min()
+    # Prevent empty value for date
+    if RoomN_tmp.empty is True:
+        start_rm = start_et
+    if Event_tmp.empty is True:
+        start_et = start_rm
     start_day = min(start_rm, start_et)
-    
-    # Run Booking_information function
-    Booking_information(wb, BK_tmp)
+
     # Run Room_info function
     if RoomN_tmp.empty is False:
-        Room_info(wb, start_day, RoomN_tmp)
+        Room_info(wb, start_day, BK_tmp, RoomN_tmp)
     # Run Meal_info and Entertainment_and_CE_info function
     if Event_tmp.empty is False:
         # Run Meal_info function
@@ -296,8 +226,88 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsx'
     
     # Save path for debugging
-    wb.SaveAs(save_path + excelfile_name)
+    wb.SaveAs(os.path.abspath(os.getcwd()) + '\\Testing files\\' + excelfile_name)
     wb.Close(True)
 
+#################################################
+#import pyodbc
+#import pandas as pd
+#import os.path
+#
+#
+#save_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
+#
+#table = pd.read_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
+#
+#
+## Convert data to excel format
+#def convert_to_excel(data, filename):
+#    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1')
+#
+#col = table.iloc[0]['Booking ID']
+## Testing booking with BK_ID directly
+#col = '010724'
+#BK_ID_no = str(int(col)).zfill(6)
+#
+#
+#conn = pyodbc.connect('Driver={SQL Server};'
+#                      'Server=VOPPSCLDBN01\VOPPSCLDBI01;'
+#                      'Database=SalesForce;'
+#                      'Trusted_Connection=yes;')
+#
+#
+## FDC User ID and Name list
+#user = pd.read_sql('SELECT DISTINCT(Id), Name \
+#                    FROM dbo.[User]', conn)
+#user = user.set_index('Id')['Name'].to_dict()
+#
+#
+#
+## extract booking info
+#BK_tmp = pd.read_sql("SELECT BK.Id, BK.OwnerId, BK.Name, FORMAT(BK.nihrm__ArrivalDate__c, 'yyyy-MM-dd') AS ArrivalDate, FORMAT(BK.nihrm__DepartureDate__c, 'yyyy-MM-dd') AS DepartureDate, BK.nihrm__CommissionPercentage__c, BK.nihrm__Property__c, BK.nihrm__FoodBeverageMinimum__c \
+#                      FROM dbo.nihrm__Booking__c AS BK \
+#                      WHERE BK.Booking_ID_Number__c = " + BK_ID_no, conn)
+#BK_tmp['OwnerId'].replace(user, inplace=True)
+#BK_ID = BK_tmp.iloc[0]['Id']
+#
+#
+## extract event info
+#Event_tmp = pd.read_sql("SELECT ET.Name, FR.Name, ET.nihrm__EventClassificationName__c, FORMAT(ET.nihrm__StartDate__c, 'yyyy/MM/dd') AS Start, ET.nihrm__AgreedEventAttendance__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastAverageCheck1__c, ET.nihrm__ForecastRevenue1__c, ET.nihrm__ForecastAverageCheck9__c, ET.nihrm__ForecastAverageCheckFactor9__c, ET.nihrm__ForecastRevenue9__c, ET.nihrm__ForecastAverageCheck2__c, ET.nihrm__ForecastAverageCheckFactor2__c, ET.nihrm__ForecastRevenue2__c, ET.nihrm__FunctionRoomRental__c, ET.nihrm__CurrentBlendedRevenue4__c \
+#                         FROM dbo.nihrm__BookingEvent__c AS ET \
+#                         INNER JOIN dbo.nihrm__FunctionRoom__c AS FR \
+#                             ON ET.nihrm__FunctionRoom__c = FR.Id \
+#                         WHERE ET.nihrm__Booking__c = '" + BK_ID + "'", conn)
+#Event_tmp.columns = ['Event name', 'Function Space', 'Event Classification', 'Start', 'Agreed', 'Food Check', 'Food Factor', 'Food Revenue', 'Outlet Check', 'Outlet Factor', 'Outlet Revenue', 'Beverage Check', 'Beverage Factor', 'Beverage Revenue', 'Rental Revenue', 'AV Revenue']
+#Event_tmp['Start'] = pd.to_datetime(Event_tmp['Start']).dt.date
+#
+#
+#
+#RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'yyyy/MM/dd') AS PatternDate, RoomB.Name, \
+#                             RoomN.nihrm__BlockedRooms1__c, RoomN.nihrm__BlockedRooms2__c, RoomN.nihrm__BlockedRooms3__c, RoomN.nihrm__BlockedRooms4__c, \
+#                             RoomN.nihrm__BlockedRate1__c, RoomN.nihrm__BlockedRate2__c, RoomN.nihrm__BlockedRate3__c, RoomN.nihrm__BlockedRate4__c \
+#                         FROM dbo.nihrm__BookingRoomNight__c AS RoomN \
+#                         INNER JOIN dbo.nihrm__BookingRoomBlock__c AS RoomB \
+#                             ON RoomN.nihrm__RoomBlock__c = RoomB.Id \
+#                         INNER JOIN dbo.nihrm__GuestroomType__c AS GS \
+#                             ON RoomN.nihrm__GuestroomType__c = GS.Id \
+#                         WHERE RoomN.nihrm__Booking__c = '" + BK_ID + "'", conn)
+#RoomN_tmp.columns = ['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'Room1', 'Room2', 'Room3', 'Room4', 'Rate1', 'Rate2', 'Rate3', 'Rate4']
+#
+## TODO: Find a better solution to fix this
+## Melt Room Night number (4 Occupancy) to columns
+#Room_no = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'Room1', 'Room2', 'Room3', 'Room4']]
+#Room_no = pd.melt(Room_no, id_vars=['Property', 'Room Type', 'Pattern Date', 'Room Block Name'], value_name='Room')
+#Room_no['variable'].replace('Room', '', inplace=True, regex=True)
+## Melt Room Rate (4 Occupancy) to columns
+#Room_rate = RoomN_tmp[['Property', 'Room Type', 'Pattern Date', 'Room Block Name','Rate1', 'Rate2', 'Rate3', 'Rate4']]
+#Room_rate = pd.melt(Room_rate, id_vars=['Property', 'Room Type', 'Pattern Date', 'Room Block Name'], value_name='Rate')
+#Room_rate['variable'].replace('Rate', '', inplace=True, regex=True)
+## Join Room Night and Room Rate
+#RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'variable'])
+#RoomN_tmp['Pattern Date'] = pd.to_datetime(RoomN_tmp['Pattern Date']).dt.date
 
-proforma_sync(BK_tmp, RoomN_tmp, Event_tmp)
+
+#proforma_sync(BK_tmp, RoomN_tmp, Event_tmp)
+
+#################################################
+
