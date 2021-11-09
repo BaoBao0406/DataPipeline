@@ -7,6 +7,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 import os.path
+import glob, datetime
 
 
 # Calculate each type of meal (Breakfast, Lunch, Dinner) and groupby to find Revenue per pax and Agreed pax By day
@@ -118,7 +119,8 @@ def Room_info(wb, start_day, BK_tmp, RoomN_tmp):
     # Commission
     if BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] != None:
         ws_Room.Range("E47").Value = BK_tmp.iloc[0]['nihrm__CommissionPercentage__c'] / 100
-
+    else:
+        ws_Room.Range("E47").Value = 0
 
 # Transfer data to excel BQT Worksheet
 def Meal_info(wb, start_day, BK_tmp, Event_tmp):
@@ -193,11 +195,14 @@ def Entertainment_and_CE_info(wb, Event_tmp):
 # main function for proforma_sync
 def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     
-    # BP_file = 'I:\\10-Sales\\+Contracts (Expiration + 10Y, Internal)\\2021\\Proforma P&L\\'
-    BP_file = os.path.abspath(os.getcwd()) + '\\Testing files\\'
+    BP_folder = 'I:\\10-Sales\\+Contracts (Expiration + 10Y, Internal)\\'
+    #BP_file = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
     
+    # Search for filename in particular folder with filename start with Booking Proforma Template
+    BP_file = glob.glob(BP_folder + '2021\\Proforma P&L\\Booking Proforma Template *.xlsx')
+
     excel = win32.DispatchEx("Excel.Application")
-    wb = excel.Workbooks.Open(BP_file + 'Booking Proforma Template_unprotected.xlsx', None, True)
+    wb = excel.Workbooks.Open(BP_file[0], None, True)
     
     # Run Booking_information function
     Booking_information(wb, BK_tmp)
@@ -225,8 +230,18 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     # excel filename format
     excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsx'
     
-    # Save path for debugging
-    wb.SaveAs(os.path.abspath(os.getcwd()) + '\\Testing files\\' + excelfile_name)
+    # BP saving path
+    bk_year = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).year
+    bk_month_number = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).month
+    bk_month_number = str(bk_month_number).zfill(2)
+    bk_month_name = datetime.datetime.strptime(bk_month_number, "%m")
+    bk_month = bk_month_number + '_' + bk_month_name.strftime("%b")
+    BP_save_file = BP_folder + str(bk_year) + '\\Proforma P&L\\' + bk_month
+    # if folder not exists create folder
+    if not os.path.exists(BP_save_file):
+        os.makedirs(BP_save_file)
+    # Save as excel in BP saving path
+    wb.SaveAs(BP_save_file + '\\' + excelfile_name)
     wb.Close(True)
 
 #################################################
@@ -246,7 +261,7 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
 #
 #col = table.iloc[0]['Booking ID']
 ## Testing booking with BK_ID directly
-#col = '010724'
+#col = '014760'
 #BK_ID_no = str(int(col)).zfill(6)
 #
 #
@@ -305,8 +320,8 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
 ## Join Room Night and Room Rate
 #RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'variable'])
 #RoomN_tmp['Pattern Date'] = pd.to_datetime(RoomN_tmp['Pattern Date']).dt.date
-
-
+#
+#
 #proforma_sync(BK_tmp, RoomN_tmp, Event_tmp)
 
 #################################################
