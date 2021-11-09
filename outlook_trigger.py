@@ -63,6 +63,7 @@ def process_save_email_2_csv():
 
 # Main function in outlook_trigger
 def outlook_trigger():
+    
     outlook = Dispatch("Outlook.Application").GetNamespace("MAPI")
     inbox = outlook.GetDefaultFolder("6")
     msgs = inbox.Items
@@ -72,7 +73,6 @@ def outlook_trigger():
     
     # Search in inbox for last three days
     msgs = msgs.Restrict("[ReceivedTime] >= '" + d +"'")
-    
     if msgs:
         # Get all the previous filename save (already process emails)
         filename_list = os.listdir(os.path.abspath(os.getcwd()) + '\\Email\\')
@@ -83,4 +83,4 @@ def outlook_trigger():
 
 
 # Testing purpose
-#outlook_trigger()
+outlook_trigger()
