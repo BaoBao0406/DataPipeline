@@ -4,7 +4,6 @@
 import pandas as pd
 import datetime, os.path
 import outlook_trigger, extract_sqlserver_data, proforma_sync, business_review_sync
-
     
 #tmp_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\'
 
