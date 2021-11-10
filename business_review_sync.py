@@ -134,17 +134,27 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk):
     # Paste Room Block name and Properties
     block_property = RoomN_rm_tmp.reset_index()[['Room Block Name', 'Property']]
     ws_Rooms.Range(ws_Rooms.Cells(70, 1), ws_Rooms.Cells(70 + block_property.shape[0] - 1, 2)).Value = block_property.values
-    # Paste Room Type
-    #room_type = RoomN_rm_tmp.reset_index()['Room Type']
-    #ws_Rooms.Range(ws_Rooms.Cells(70, 3), ws_Rooms.Cells(70 + room_type.shape[0] - 1, 3)).Value = room_type.values
     
     # Paste Room Type and Ask rate
     ask_rate = ask_rate.reset_index()[['Room Type', 0]]
-    convert_to_excel(ask_rate, 'rate')
-    ws_Rooms.Range(ws_Rooms.Cells(70, 5), ws_Rooms.Cells(70 + ask_rate.shape[0] - 1, 5)).Value = ask_rate.values
+    ask_rate.columns = ['Room Type', 'Ask rate']
+    # 
+    for i in range(ask_rate.shape[0]):
+        # Paste Room Type to Cell (Must use Cell to paste)
+        ws_Rooms.Cells(70 + i, 3).Value = ask_rate.iloc[i]['Room Type']
+        # Paste Ask rate to Cell (Must use Cell to paste)
+        ws_Rooms.Cells(70 + i, 5).Value = ask_rate.iloc[i]['Ask rate']
+
     # Paste Room table
     ws_Rooms.Range(ws_Rooms.Cells(70, 7 + date_diff), ws_Rooms.Cells(70 + room_tmp.shape[0] - 1, 7 + date_diff + room_tmp.shape[1] - 1)).Value = room_tmp.values
+    
     # Paste Rate table
+    j = 0
+    for i in range(rate_tmp.shape[0]):
+        j = i * 3
+        ws_Rates.Range(ws_Rates.Cells(10 + j, 9 + date_diff), ws_Rates.Cells(10 + j, 9 + date_diff + rate_tmp.shape[1] - 1)).Value = rate_tmp.iloc[i]
+        
+        
     
     
 # Transfer data to excel Meeting Space Worksheet
