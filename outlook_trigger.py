@@ -9,7 +9,7 @@ import pandas as pd
 
 
 # Keyword to search for email subject
-msgKeyWord = re.compile(r'booking dataflow')
+msgKeyWord = re.compile(r'^booking dataflow')
 
 
 # Loop for all email within the Date Range with the keyword
@@ -83,4 +83,4 @@ def outlook_trigger():
 
 
 # Testing purpose
-outlook_trigger()
+#outlook_trigger()
