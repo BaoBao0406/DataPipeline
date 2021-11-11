@@ -96,7 +96,9 @@ def rooms_info(wb, BK_tmp, Event_tmp):
 
 
 # Room and Rates part
-def rooms_rates_info(wb, RoomN_tmp, start_bk):
+def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc):
+    
+
     
     ws_Rooms = wb.Worksheets('Rooms')
     ws_Rates = wb.Worksheets('Daily Rates')
@@ -115,9 +117,22 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk):
     # Calculate Difference between Room Block day and Booking day
     date_diff = (pd.to_datetime(start_rm) - start_bk).days
     
-    # TODO: replace BR Room type
-    # df.set_index('id')['value'].to_dict()
-    # TODO: if inlude bbf add breakfast to room rate
+    # Replace BR Room type
+    room_type_list = pd.read_csv(os.path.abspath(os.getcwd()) + '\\Documents\\room_type.csv', header=5)
+    # Convert to dictionary and replace room type
+    room_type_dict = room_type_list.set_index('FDC_room_type')['room_type'].to_dict()
+    RoomN_rm_tmp['Room Type'].replace(room_type_dict, inplace=True)
+    
+    # testing
+    bbf_inc = 'yes'
+    breakfast_rate = 164
+    
+    # if inlude bbf add breakfast to room rate
+    if bbf_inc == 'yes':
+        RoomN_rm_tmp['breakfast'] = RoomN_rm_tmp['variable'].astype(int) * breakfast_rate
+        RoomN_rm_tmp['Rate'] = RoomN_rm_tmp['Rate'] + RoomN_rm_tmp['breakfast']
+        RoomN_rm_tmp['Room Type'] = RoomN_rm_tmp['Room Type'] + ' + ' + RoomN_rm_tmp['variable'].astype(str) + ' BBF'
+        
     
     RoomN_rm_tmp = RoomN_rm_tmp.groupby(['Room Block Name', 'Property', 'Room Type', 'variable', 'Pattern Date'])['Room', 'Rate'].sum()
     RoomN_rm_tmp = RoomN_rm_tmp.unstack()
@@ -224,7 +239,8 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp):
     # Find Booking start day
     start_bk = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate'])
     # Run rooms rates info function
-    rooms_rates_info(wb, RoomN_tmp, start_bk)
+    bbf_inc = 'yes'
+    rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc)
     
     
     # Run meeting space info function
