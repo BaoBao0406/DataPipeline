@@ -80,6 +80,7 @@ def rooms_info(wb, BK_tmp, Event_tmp):
         Event_tmp_rest = Event_tmp[['Function Space', 'Event Classification', 'Food Revenue', 'Outlet Revenue', 'Beverage Revenue']]
         Event_tmp_rest['Total F&B Revenue'] = Event_tmp_rest['Food Revenue'] + Event_tmp_rest['Outlet Revenue'] + Event_tmp_rest['Beverage Revenue']
         # Exclude Package and Breakfast classification type
+        Event_tmp_rest['Event Classification'].replace(np.nan, 'Empty', inplace=True)
         Event_tmp_rest = Event_tmp_rest[~Event_tmp_rest['Event Classification'].str.contains('Package|Breakfast')]
         # Venetian restaurant list and excel cell
         venetian_rest = {'Bambu': 29, 'Jiang Nan': 30, 'Imperial House': 31, 'Golden Peacock': 32, 'North': 33, 'Portofino': 34}
@@ -135,7 +136,7 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc):
         
     # Group by to get daily pattern for room night and rates and sum all
     RoomN_rm_tmp = RoomN_rm_tmp.groupby(['Room Block Name', 'Property', 'Room Type', 'variable', 'Pattern Date'])['Room', 'Rate'].sum()
-    RoomN_rm_tmp = RoomN_rm_tmp.unstack()
+    RoomN_rm_tmp = RoomN_rm_tmp.unstack(fill_value=0)
     
     # Room table
     room_tmp = RoomN_rm_tmp['Room']
@@ -181,20 +182,20 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp):
     property_et_list = {'Venetian': 8, 'Conrad': 9, 'Londoner': 9, 'Parisian': 10}
     
     # Peak Area and Peak day
-    if Event_tmp.empty is False:
-        Events_tb_tmp = Event_tmp[['Property', 'Start', 'Agreed', 'Area']]
-        Events_tb_tmp.sort_values(by='Start', inplace=True)
-        # Loop for all property in property_et_list list
-        for d in property_et_list.keys():
-            # Filter event by property
-            Events_loop_tmp = Events_tb_tmp[Events_tb_tmp['Property'].str.contains(d)].reset_index(drop=True)
-            if Events_loop_tmp.empty is False:
-                # Find the row index number for max Area
-                index = Events_loop_tmp['Area'].idxmax()
-                # Peak meeting date by property
-                ws_Events.Cells(18, property_et_list[d]).Value = str(Events_loop_tmp.iloc[index]['Start'])
-                # Peak SQM by property
-                ws_Events.Cells(19, property_et_list[d]).Value = Events_loop_tmp.iloc[index]['Area']
+    Events_tb_tmp = Event_tmp[['Property', 'Start', 'Agreed', 'Area']]
+    Events_tb_tmp.sort_values(by='Start', inplace=True)
+    Events_tb_tmp.replace(np.nan, 0, inplace=True)
+    # Loop for all property in property_et_list list
+    for d in property_et_list.keys():
+        # Filter event by property
+        Events_loop_tmp = Events_tb_tmp[Events_tb_tmp['Property'].str.contains(d)].reset_index(drop=True)
+        if Events_loop_tmp.empty is False:
+            # Find the row index number for max Area
+            index = Events_loop_tmp['Area'].idxmax()
+            # Peak meeting date by property
+            ws_Events.Cells(18, property_et_list[d]).Value = str(Events_loop_tmp.iloc[index]['Start'])
+            # Peak SQM by property
+            ws_Events.Cells(19, property_et_list[d]).Value = Events_loop_tmp.iloc[index]['Area']
     
     # Peak Room day
     if RoomN_tmp.empty is False:
@@ -209,13 +210,15 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp):
                 ws_Events.Cells(20, property_et_list[d]).Value = Room_loop_tmp.iloc[index]['Room']
                 
     # Event table
-    if Event_tmp.empty is False:
-        Events_tb_tmp = Event_tmp[['Start', 'Start Time', 'End Time', 'Event Classification', 'Setup', 'Function Space', 'Rental Revenue', 'Agreed', 'Function Space Option']]
-        # Replace NaN value for Agreed and Rental Revenue
-        Events_tb_tmp['Agreed'] = Events_tb_tmp['Agreed'].replace(np.NaN, 0, regex=True)
-        Events_tb_tmp['Rental Revenue'] = Events_tb_tmp['Rental Revenue'].replace(np.NaN, 0, regex=True)
-        Events_tb_tmp.sort_values(by='Start', inplace=True)
-        Events_tb_tmp['Start'] = Events_tb_tmp['Start'].astype(str)
+    Events_tb_tmp = Event_tmp[['Start', 'Start Time', 'End Time', 'Event Classification', 'Setup', 'Function Space', 'Rental Revenue', 'Agreed', 'Function Space Option']]
+    # Replace NaN value for Agreed and Rental Revenue
+    Events_tb_tmp['Agreed'] = Events_tb_tmp['Agreed'].replace(np.NaN, 0, regex=True)
+    Events_tb_tmp['Rental Revenue'] = Events_tb_tmp['Rental Revenue'].replace(np.NaN, 0, regex=True)
+    Events_tb_tmp.sort_values(by='Start', inplace=True)
+    Events_tb_tmp['Start'] = Events_tb_tmp['Start'].astype(str)
+    
+    # Paste event table only if number of event is less than 360 (360 is number of event line cell in BR)
+    if Events_tb_tmp.shape[0] < 360:
         # Transfer event table to BR
         ws_Events.Range(ws_Events.Cells(24,2), ws_Events.Cells(24 + Events_tb_tmp.shape[0] - 1, 10)).Value = Events_tb_tmp.values
 
@@ -237,10 +240,12 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
     # Find Booking start day
     start_bk = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate'])
     # Run rooms rates info function
-    rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc)
+    if RoomN_tmp.empty is False:
+        rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc)
     
     # Run meeting space info function
-    meeting_space_info(wb, RoomN_tmp, Event_tmp)
+    if Event_tmp.empty is False:
+        meeting_space_info(wb, RoomN_tmp, Event_tmp)
     
     # excel filename format
     excelfile_name = 'BR_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsm'
@@ -260,11 +265,10 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
 
 
 #    save_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
-#
 #    wb.SaveAs(save_path + excelfile_name)
 #    wb.Close(True)
-
-
+#
+#
 #################################################
 #import pyodbc
 #
@@ -279,7 +283,7 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
 #
 ##col = table.iloc[0]['Booking ID']
 ## Testing booking with BK_ID directly
-#BK_ID_no = '014760'
+#BK_ID_no = '005686'
 ##BK_ID_no = str(int(col)).zfill(6)
 #
 #
@@ -350,6 +354,6 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
 #
 #
 ##################################################
-#
+#bbf_inc = 'no'
 #
 #business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc)
