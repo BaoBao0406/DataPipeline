@@ -195,8 +195,8 @@ def Entertainment_and_CE_info(wb, Event_tmp):
 # main function for proforma_sync
 def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     
+    # BP folder location
     BP_folder = 'I:\\10-Sales\\+Contracts (Expiration + 10Y, Internal)\\'
-    #BP_file = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
     
     # Search for filename in particular folder with filename start with Booking Proforma Template
     BP_file = glob.glob(BP_folder + '2021\\Proforma P&L\\Booking Proforma Template *.xlsx')
