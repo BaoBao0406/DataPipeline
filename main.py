@@ -5,7 +5,6 @@ import pandas as pd
 import datetime, os.path, os
 import outlook_trigger, extract_sqlserver_data, proforma_sync, business_review_sync
     
-#tmp_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\'
 
 # Run outlook_trigger function
 outlook_trigger.outlook_trigger()
@@ -38,8 +37,7 @@ if os.path.exists(os.getcwd() + '\\tmp.csv'):
     
     # remove tmp file
     os.remove(os.getcwd() + '\\tmp.csv')
-    
-        
+      
 # TODO: Convert text for BookingComment
 
 # TODO: Using model to
