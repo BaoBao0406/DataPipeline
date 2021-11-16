@@ -2,7 +2,7 @@
 # outlook_trigger.py - search for keyword in outlook email Subject, and extract table in email Body if criteria is met. 
 # and export to csv for later process  
 
-
+import win32com.client as win32
 from win32com.client import Dispatch
 import datetime, os.path, re, io
 import pandas as pd
@@ -28,9 +28,9 @@ def extract_email_table(msg):
         table_tmp = pd.read_csv(io.StringIO(table_tmp.to_csv(index=False)), sep=",")
         # Add sender email to table for reply email send
         if msg.SenderEmailType=='EX':
-               table_tmp['sender'] = msg.Sender.GetExchangeUser().PrimarySmtpAddress
+            table_tmp['sender'] = msg.Sender.GetExchangeUser().PrimarySmtpAddress
         else:
-               table_tmp['sender'] = msg.SenderEmailAddress
+            table_tmp['sender'] = msg.SenderEmailAddress
         
         # TODO: Add function to debug
         
@@ -93,10 +93,18 @@ def outlook_trigger():
             process_save_email_2_csv(MsgToMove)
 
 
-# TODO: reply email with BR and BP path
-#def reply_notification():
-    
+# Function to reply notification email with BR and BP path
+def reply_notification(bk_row):
+    outlook = win32.Dispatch("Outlook.Application")
+    mail = outlook.CreateItem(0)
+    mail.To = bk_row['sender']
+    mail.Subject = 'Notification for successfully create BP/BR'
+    mail.GetInspector
+    MessageBody = "<p>BP file path :&nbsp;<a href='" + str(bk_row['BP_file_path']) + "'>" + str(bk_row['BP_file_path']) + "</a></p><p>BR file path :&nbsp;<a href='" + str(bk_row['BR_file_path']) + "'>"  + str(bk_row['BR_file_path']) + "</a></p>"
+    index = mail.HTMLbody.find('>', mail.HTMLbody.find('<body')) 
+    mail.HTMLbody = mail.HTMLbody[:index + 1] + MessageBody + mail.HTMLbody[index + 1:]
+    mail.send
     
 
 # Testing purpose
-outlook_trigger()
+#outlook_trigger()
