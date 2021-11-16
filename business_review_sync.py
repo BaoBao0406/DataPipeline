@@ -125,7 +125,7 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc):
     room_type_dict = room_type_list.set_index('FDC_room_type')['room_type'].to_dict()
     RoomN_rm_tmp['Room Type'].replace(room_type_dict, inplace=True)
     
-    # testing
+    # default breakfast price
     breakfast_rate = 164
     
     # if inlude bbf add breakfast to room rate
@@ -260,9 +260,11 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
     if not os.path.exists(BR_save_file):
         os.makedirs(BR_save_file)
     # Save as excel in BR saving path
-    wb.SaveAs(BR_save_file + '\\' + excelfile_name)
+    BR_file_path = BR_save_file + '\\' + excelfile_name
+    wb.SaveAs(BR_file_path)
     wb.Close(True)
 
+    return BR_file_path
 
 #    save_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
 #    wb.SaveAs(save_path + excelfile_name)
