@@ -12,28 +12,6 @@ import pandas as pd
 msgKeyWord = re.compile(r'^booking dataflow')
 
 
-# Loop for all email within the Date Range with the keyword
-MsgToMove = []
-def search_all_mail(filename_list, msgs):
-    for msg in msgs:
-        # Search for keywords in email subject
-        msgSearch = msgKeyWord.search((msg.Subject).lower())
-        if (msgSearch == None) is False:
-            msg_name = re.sub('[^a-zA-Z0-9 \n\.]', '', msg.Subject) + '.msg'
-            if msg_name not in filename_list:
-                MsgToMove.append(msg)
-                msgSearch = 'None'
-                
-# Function to get email body information in table
-def extract_email_table(msg):
-        # Using read_html to get email table, then use table[0] to convert to DataFrame format
-        table_tmp = pd.read_html(msg.HTMLBody, header=0, index_col=0)[0].T
-        # Convert to csv to remove the index column then convert back to DatdFrame
-        table_tmp = pd.read_csv(io.StringIO(table_tmp.to_csv(index=False)), sep=",")
-        # TODO: Add function to debug
-        
-        return table_tmp
-    
 # Function to save the unprocess booking email to folder
 def save_email(msg):
     # replace all the special character in email Subject
@@ -42,8 +20,41 @@ def save_email(msg):
     msg.SaveAs(os.path.abspath(os.getcwd()) + '\\Email\\' + msg_filename)
 
 
+# Function to get email body information in table
+def extract_email_table(msg):
+        # Using read_html to get email table, then use table[0] to convert to DataFrame format
+        table_tmp = pd.read_html(msg.HTMLBody, header=0, index_col=0)[0].T
+        # Convert to csv to remove the index column then convert back to DatdFrame
+        table_tmp = pd.read_csv(io.StringIO(table_tmp.to_csv(index=False)), sep=",")
+        # Add sender email to table for reply email send
+        if msg.SenderEmailType=='EX':
+               table_tmp['sender'] = msg.Sender.GetExchangeUser().PrimarySmtpAddress
+        else:
+               table_tmp['sender'] = msg.SenderEmailAddress
+        
+        # TODO: Add function to debug
+        
+        return table_tmp
+    
+    
+# Loop for all email within the Date Range with the keyword
+def search_all_mail(filename_list, msgs, MsgToMove):
+    for msg in msgs:
+        # Search for keywords in email subject
+        msgSearch = msgKeyWord.search((msg.Subject).lower())
+        if (msgSearch == None) is False:
+            # replace all the special character in email Subject
+            msg_name = re.sub('[^a-zA-Z0-9 \n\.]', '', msg.Subject) + '.msg'
+            # if msg file not exist in filename_list list, append to MsgToMove
+            if msg_name not in filename_list:
+                MsgToMove.append(msg)
+                msgSearch = 'None'
+                
+    return MsgToMove
+
+
 # Function to Move email to specific folder and save to csv file
-def process_save_email_2_csv():
+def process_save_email_2_csv(MsgToMove):
     table = pd.DataFrame()
     for msg in MsgToMove:
         # run function "save_email"
@@ -63,7 +74,7 @@ def process_save_email_2_csv():
 
 # Main function in outlook_trigger
 def outlook_trigger():
-    
+    MsgToMove = []
     outlook = Dispatch("Outlook.Application").GetNamespace("MAPI")
     inbox = outlook.GetDefaultFolder("6")
     msgs = inbox.Items
@@ -76,11 +87,16 @@ def outlook_trigger():
     if msgs:
         # Get all the previous filename save (already process emails)
         filename_list = os.listdir(os.path.abspath(os.getcwd()) + '\\Email\\')
-        search_all_mail(filename_list, msgs)
+        MsgToMove = search_all_mail(filename_list, msgs, MsgToMove)
         
         if MsgToMove:
-            process_save_email_2_csv()
+            process_save_email_2_csv(MsgToMove)
 
+
+# TODO: reply email with BR and BP path
+#def reply_notification():
+    
+    
 
 # Testing purpose
-#outlook_trigger()
+outlook_trigger()
