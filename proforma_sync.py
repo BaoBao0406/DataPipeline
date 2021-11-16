@@ -241,9 +241,12 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     if not os.path.exists(BP_save_file):
         os.makedirs(BP_save_file)
     # Save as excel in BP saving path
-    wb.SaveAs(BP_save_file + '\\' + excelfile_name)
+    BP_file_path = BP_save_file + '\\' + excelfile_name
+    wb.SaveAs(BP_file_path)
     wb.Close(True)
-
+    
+    return BP_file_path
+    
 #################################################
 #import pyodbc
 #import pandas as pd
