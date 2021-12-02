@@ -26,15 +26,15 @@ def BK_sql_data(BK_ID_no, user, conn):
 
 # extract roomnight_by_day info function
 def RoomN_sql_data(BK_ID, conn):
-    # Room SQL
+    # Room Night SQL
     RoomN_tmp = pd.read_sql("SELECT GS.nihrm__Property__c, GS.Name, FORMAT(RoomN.nihrm__PatternDate__c, 'yyyy/MM/dd') AS PatternDate, RoomB.Name, \
                                  RoomN.nihrm__BlockedRooms1__c, RoomN.nihrm__BlockedRooms2__c, RoomN.nihrm__BlockedRooms3__c, RoomN.nihrm__BlockedRooms4__c, \
                                  RoomN.nihrm__BlockedRate1__c, RoomN.nihrm__BlockedRate2__c, RoomN.nihrm__BlockedRate3__c, RoomN.nihrm__BlockedRate4__c \
                              FROM dbo.nihrm__BookingRoomNight__c AS RoomN \
-                             INNER JOIN dbo.nihrm__BookingRoomBlock__c AS RoomB \
-                                 ON RoomN.nihrm__RoomBlock__c = RoomB.Id \
-                             INNER JOIN dbo.nihrm__GuestroomType__c AS GS \
-                                 ON RoomN.nihrm__GuestroomType__c = GS.Id \
+                                 INNER JOIN dbo.nihrm__BookingRoomBlock__c AS RoomB \
+                                     ON RoomN.nihrm__RoomBlock__c = RoomB.Id \
+                                 INNER JOIN dbo.nihrm__GuestroomType__c AS GS \
+                                     ON RoomN.nihrm__GuestroomType__c = GS.Id \
                              WHERE RoomN.nihrm__Booking__c = '" + BK_ID + "'", conn)
     RoomN_tmp.columns = ['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'Room1', 'Room2', 'Room3', 'Room4', 'Rate1', 'Rate2', 'Rate3', 'Rate4']
     
@@ -77,9 +77,8 @@ def extract_sqlserver_data(table):
     # for testing purpose
 #    table = pd.read_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
     
-    col = table['Booking ID']
-    BK_ID_no = str(int(col)).zfill(6)
-    
+    bk_row = table['Booking ID']
+    BK_ID_no = str(int(bk_row)).zfill(6)
 
     conn = pyodbc.connect('Driver={SQL Server};'
                           'Server=VOPPSCLDBN01\VOPPSCLDBI01;'
