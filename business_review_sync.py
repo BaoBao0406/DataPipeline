@@ -133,6 +133,12 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc):
         RoomN_rm_tmp['breakfast'] = RoomN_rm_tmp['variable'].astype(int) * breakfast_rate
         RoomN_rm_tmp['Rate'] = RoomN_rm_tmp['Rate'] + RoomN_rm_tmp['breakfast']
         RoomN_rm_tmp['Room Type'] = RoomN_rm_tmp['Room Type'] + ' + ' + RoomN_rm_tmp['variable'].astype(str) + ' BBF'
+        # breakfast rate input
+        property_bbf_list = {'Venetian': 4, 'Conrad': 5, 'Londoner': 6, 'Parisian': 7}
+        property_bbf = RoomN_rm_tmp['Property'].unique()
+        for i in property_bbf:
+            ws_Rooms.Cells(57, property_bbf_list[i]).Value = breakfast_rate
+        
         
     # Group by to get daily pattern for room night and rates and sum all
     RoomN_rm_tmp = RoomN_rm_tmp.groupby(['Room Block Name', 'Property', 'Room Type', 'variable', 'Pattern Date'])['Room', 'Rate'].sum()
@@ -165,12 +171,12 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc):
     ws_Rooms.Range(ws_Rooms.Cells(70, 7 + date_diff), ws_Rooms.Cells(70 + room_tmp.shape[0] - 1, 7 + date_diff + room_tmp.shape[1] - 1)).Value = room_tmp.values
     
     # Paste Rate table (set j as the row difference between first row and current row during looping)
-    j = 0
+    row_diff = 0
     # Loop over rate_tmp table to paste rates
     for i in range(rate_tmp.shape[0]):
-        j = i * 3
+        row_diff = i * 3
         # Paste rate
-        ws_Rates.Range(ws_Rates.Cells(10 + j, 9 + date_diff), ws_Rates.Cells(10 + j, 9 + date_diff + rate_tmp.shape[1] - 1)).Value = rate_tmp.iloc[i]
+        ws_Rates.Range(ws_Rates.Cells(10 + row_diff, 9 + date_diff), ws_Rates.Cells(10 + row_diff, 9 + date_diff + rate_tmp.shape[1] - 1)).Value = rate_tmp.iloc[i]
         
     
 # Transfer data to excel Meeting Space Worksheet
@@ -193,9 +199,9 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp):
             # Find the row index number for max Area
             index = Events_loop_tmp['Area'].idxmax()
             # Peak meeting date by property
-            ws_Events.Cells(18, property_et_list[d]).Value = str(Events_loop_tmp.iloc[index]['Start'])
+            ws_Events.Cells(16, property_et_list[d]).Value = str(Events_loop_tmp.iloc[index]['Start'])
             # Peak SQM by property
-            ws_Events.Cells(19, property_et_list[d]).Value = Events_loop_tmp.iloc[index]['Area']
+            ws_Events.Cells(17, property_et_list[d]).Value = Events_loop_tmp.iloc[index]['Area']
     
     # Peak Room day
     if RoomN_tmp.empty is False:
@@ -207,7 +213,7 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp):
                 # Find the row index number for Room
                 index = Room_loop_tmp['Room'].idxmax()
                 # Peak room by property
-                ws_Events.Cells(20, property_et_list[d]).Value = Room_loop_tmp.iloc[index]['Room']
+                ws_Events.Cells(18, property_et_list[d]).Value = Room_loop_tmp.iloc[index]['Room']
                 
     # Event table
     Events_tb_tmp = Event_tmp[['Start', 'Start Time', 'End Time', 'Event Classification', 'Setup', 'Function Space', 'Rental Revenue', 'Agreed', 'Function Space Option']]
@@ -280,12 +286,12 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
 #
 #
 ## Convert data to excel format
-#def convert_to_excel(data, filename):
-#    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1')
+##def convert_to_excel(data, filename):
+##    data.to_excel(save_path + filename + '.xlsx', sheet_name='Sheet1')
 #
 ##col = table.iloc[0]['Booking ID']
 ## Testing booking with BK_ID directly
-#BK_ID_no = '005686'
+#BK_ID_no = '014760'
 ##BK_ID_no = str(int(col)).zfill(6)
 #
 #
@@ -356,6 +362,6 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
 #
 #
 ##################################################
-#bbf_inc = 'no'
+#bbf_inc = 'yes'
 #
 #business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc)
