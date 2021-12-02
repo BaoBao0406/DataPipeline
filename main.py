@@ -48,4 +48,4 @@ if os.path.exists(os.getcwd() + '\\tmp.csv'):
       
 # TODO: Convert text for BookingComment
 
-# TODO: Using model to
+# TODO: Using model to predict
