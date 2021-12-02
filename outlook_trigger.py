@@ -68,6 +68,8 @@ def process_save_email_2_csv(MsgToMove):
         else:
             table = pd.concat([table, table_tmp])
     table = table.reset_index().drop(['index'], axis=1)
+    # Change column header name
+    table.columns = ['Booking ID', 'Breakfast inclusive', 'Proforma', 'Business Review', 'Facility License Agreement', 'Booking and Room rate Prediction']
     # Export table to csv file for later process
     table.to_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
 
