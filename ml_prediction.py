@@ -99,11 +99,13 @@ def Event_sql_data(BK_ID, conn):
 
 # TODO: RoomB sql for rates
 def RoomB_sql_data(BK_ID, conn):
-    RoomB_tmp = pd.read_sql("SELECT RoomB.nihrm__Location__c, ac.nihrm__RegionName__c, ac.Industry, ag.Name, ag.Industry, BK.End_User_Region__c, BK.End_User_SIC__c, BK.nihrm__BookingTypeName__c, BK.nihrm__CurrentBlendedRoomnightsTotal__c, BK.VCL_Blended_F_B_Revenue__c, BK.nihrm__CurrentBlendedEventRevenue7__c, BK.nihrm__CurrentBlendedEventRevenue4__c, BK.RSO_Manager__c, BK.nihrm__BookingMarketSegmentName__c, BK.Promotion__c, RoomB.nihrm__PeakRoomnightsAgreed__c, \
+    RoomB_tmp = pd.read_sql("SELECT PP.Name, ac.nihrm__RegionName__c, ac.Industry, ag.Name, ag.Industry, BK.End_User_Region__c, BK.End_User_SIC__c, BK.nihrm__BookingTypeName__c, BK.nihrm__CurrentBlendedRoomnightsTotal__c, BK.VCL_Blended_F_B_Revenue__c, BK.nihrm__CurrentBlendedEventRevenue7__c, BK.nihrm__CurrentBlendedEventRevenue4__c, BK.RSO_Manager__c, BK.nihrm__BookingMarketSegmentName__c, BK.Promotion__c, RoomB.nihrm__PeakRoomnightsAgreed__c, \
                                     RoomB.nihrm__CurrentBlendedADR__c, FORMAT(RoomB.nihrm__StartDate__c, 'yyyy/MM/dd') AS StartDate, FORMAT(RoomB.nihrm__EndDate__c, 'yyyy/MM/dd') AS EndDate \
                              FROM dbo.nihrm__Booking__c AS BK \
                                  INNER JOIN dbo.nihrm__BookingRoomBlock__c AS RoomB \
                                      ON BK.Id = RoomB.nihrm__Booking__c \
+                                 INNER JOIN dbo.nihrm__Location__c AS PP \
+                                     ON RoomB.nihrm__Location__c = PP.Id \
                                  LEFT JOIN dbo.Account AS ac \
                                      ON BK.nihrm__Account__c = ac.Id \
                                  LEFT JOIN dbo.Account AS ag \
@@ -157,6 +159,14 @@ BK_mat_percent = BK_mat_percent[['Property', 'Account: Region', 'Account: Indust
 
 print(BK_mat_percent.T)
 
+# TODO: Load Transformer
+# TODO: Use Transformer to scale or transform values
+
+# TODO: Load ML percentage model
+# TODO: ML percentage prediction
+
+# TODO: SHARP value for explanation
+
 
 # rename RoomB_tmp column
 RoomB_tmp.columns = ['Property', 'Account: Region', 'Account: Industry', 'Agency: Account Name', 'Agency: Industry', 'Booking: End User Region', 'Booking: End User SIC', 
@@ -187,6 +197,16 @@ RB_adr_rate = RB_adr_rate[['Property', 'Account: Region', 'Account: Industry', '
                            'Booking: Blended F&B Revenue', 'Booking: Blended Rental Revenue', 'Booking: Blended AV Revenue', 'Attendance', 'Booking: RSO Manager', 'Booking: Market Segment', 'Booking: Promotion', 
                            'Peak Roomnights Agreed', 'Inhouse day', 'Lead day', 'Decision day', 'Arrival Month', 'Booked Month', 'Last Status Month']]
 
-print(RB_adr_rate)
+print(RB_adr_rate.T)
+
+# TODO: Load Transformer
+# TODO: Use Transformer to scale or transform values
+
+# TODO: Load ML adr rate model
+# TODO: ML adr rate prediction
+
+
+# TODO: Save the ouput as excel?
+
 
 # TODO: take out Blended Revenue Total in RoomBlock
