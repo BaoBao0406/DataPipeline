@@ -220,6 +220,8 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp):
     # Replace NaN value for Agreed and Rental Revenue
     Events_tb_tmp['Agreed'] = Events_tb_tmp['Agreed'].replace(np.NaN, 0, regex=True)
     Events_tb_tmp['Rental Revenue'] = Events_tb_tmp['Rental Revenue'].replace(np.NaN, 0, regex=True)
+    # Add string 'HKD/MOP ' to steamline the format in BR
+    Events_tb_tmp['Rental Revenue'] = 'HKD/MOP ' + Events_tb_tmp['Rental Revenue'].astype(str)
     Events_tb_tmp.sort_values(by='Start', inplace=True)
     Events_tb_tmp['Start'] = Events_tb_tmp['Start'].astype(str)
     
@@ -252,10 +254,10 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
     # Run meeting space info function
     if Event_tmp.empty is False:
         meeting_space_info(wb, RoomN_tmp, Event_tmp)
-    
-    # excel filename format
+#    
+#    # excel filename format
     excelfile_name = 'BR_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsm'
-    
+#    
     # BR filename to save
     bk_year = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).year
     bk_month_number = str(pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).month)
@@ -268,9 +270,11 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
     # Save as excel in BR saving path
     BR_file_path = BR_save_file + '\\' + excelfile_name
     wb.SaveAs(BR_file_path)
+    # to solve the runtime error in BR before closing
+    excel.EnableEvents = False
     wb.Close(True)
 
-    return BR_file_path
+#    return BR_file_path
 
 #    save_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
 #    wb.SaveAs(save_path + excelfile_name)
@@ -360,7 +364,7 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
 #RoomN_tmp = pd.merge(Room_no, Room_rate, on=['Property', 'Room Type', 'Pattern Date', 'Room Block Name', 'variable'])
 #RoomN_tmp['Pattern Date'] = pd.to_datetime(RoomN_tmp['Pattern Date']).dt.date
 #
-#
+# 
 ##################################################
 #bbf_inc = 'yes'
 #
