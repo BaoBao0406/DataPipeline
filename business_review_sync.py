@@ -19,7 +19,7 @@ def event_rest_revenue(ws_Rooms, Event_tmp_rest, rest_et_list):
 
 
 # Transfer data to excel Rooms Worksheet
-def rooms_info(wb, BK_tmp, Event_tmp):
+def rooms_info(wb, BK_tmp, Event_tmp, restaurant_info):
     # Rooms Worksheet
     ws_Rooms = wb.Worksheets('Rooms')
     
@@ -76,28 +76,32 @@ def rooms_info(wb, BK_tmp, Event_tmp):
             ws_Rooms.Range("B" + property_FB_list[d]).Value = BK_tmp.iloc[0]['nihrm__FoodBeverageMinimum__c']
     
     # Food and Beverage Part
-    if Event_tmp.empty is False:
+    if Event_tmp.empty is False:        
         Event_tmp_rest = Event_tmp[['Function Space', 'Event Classification', 'Food Revenue', 'Outlet Revenue', 'Beverage Revenue']]
         Event_tmp_rest['Total F&B Revenue'] = Event_tmp_rest['Food Revenue'] + Event_tmp_rest['Outlet Revenue'] + Event_tmp_rest['Beverage Revenue']
         # Exclude Package and Breakfast classification type
         Event_tmp_rest['Event Classification'].replace(np.nan, 'Empty', inplace=True)
         Event_tmp_rest = Event_tmp_rest[~Event_tmp_rest['Event Classification'].str.contains('Package|Breakfast')]
+        
         # Venetian restaurant list and excel cell
-        venetian_rest = {'Bambu': 29, 'Jiang Nan': 30, 'Imperial House': 31, 'Golden Peacock': 32, 'North': 33, 'Portofino': 34}
+        venetian_rest = restaurant_info[restaurant_info['property'] == 'VMRH'][['restaurant_list', 'br_cell_number']].set_index('restaurant_list')
+        venetian_rest = venetian_rest['br_cell_number'].to_dict()
         # Run function for Venetian rest revenue
         event_rest_revenue(ws_Rooms, Event_tmp_rest, venetian_rest)
         # Conrad restaurant list and excel cell
-        conrad_rest = {'Churchill': 39, 'Southern Kitchen': 42}
+        conrad_rest = restaurant_info[restaurant_info['property'] == 'CMCC'][['restaurant_list', 'br_cell_number']].set_index('restaurant_list')
+        conrad_rest = conrad_rest['br_cell_number'].to_dict()
         # Run function for Conrad rest revenue
         event_rest_revenue(ws_Rooms, Event_tmp_rest, conrad_rest)
         # Conrad restaurant list and excel cell
-        parisian_rest = {'Market Bistro': 47, 'Le Buffet': 48, 'Brasserie': 49, 'Lotus Palace': 50, 'La Chine': 51}
+        parisian_rest = restaurant_info[restaurant_info['property'] == 'PARIS'][['restaurant_list', 'br_cell_number']].set_index('restaurant_list')
+        parisian_rest = parisian_rest['br_cell_number'].to_dict()
         # Run function for Parisian rest revenue
         event_rest_revenue(ws_Rooms, Event_tmp_rest, parisian_rest)
 
 
 # Room and Rates part
-def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc):
+def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc, room_type_list):
     
     ws_Rooms = wb.Worksheets('Rooms')
     ws_Rates = wb.Worksheets('Daily Rates')
@@ -119,8 +123,6 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc):
     # Calculate Difference between Room Block day and Booking day
     date_diff = (pd.to_datetime(start_rm) - start_bk).days
     
-    # Replace BR Room type
-    room_type_list = pd.read_csv(os.path.abspath(os.getcwd()) + '\\Documents\\room_type.csv', header=5)
     # Convert to dictionary and replace room type
     room_type_dict = room_type_list.set_index('FDC_room_type')['room_type'].to_dict()
     RoomN_rm_tmp['Room Type'].replace(room_type_dict, inplace=True)
@@ -180,7 +182,7 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc):
         
     
 # Transfer data to excel Meeting Space Worksheet
-def meeting_space_info(wb, RoomN_tmp, Event_tmp):
+def meeting_space_info(wb, RoomN_tmp, Event_tmp, restaurant_info):
     # Meeting Space Worksheet
     ws_Events = wb.Worksheets('Meeting Space')
     
@@ -188,10 +190,12 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp):
     property_et_list = {'Venetian': 8, 'Conrad': 9, 'Londoner': 9, 'Parisian': 10}
     
     # Peak Area and Peak day
-    Events_tb_tmp = Event_tmp[['Property', 'Start', 'Agreed', 'Area']]
+    Events_tb_tmp = Event_tmp[['Property', 'Start', 'Agreed', 'Area', 'Event Classification']]
     Events_tb_tmp.sort_values(by='Start', inplace=True)
     Events_tb_tmp.replace(np.nan, 0, inplace=True)
     # Loop for all property in property_et_list list
+    restaurant_list = restaurant_info['restaurant_list'].tolist()
+    Events_tb_tmp = Events_tb_tmp[~Events_tb_tmp['Event Classification'].isin(restaurant_list)]
     for d in property_et_list.keys():
         # Filter event by property
         Events_loop_tmp = Events_tb_tmp[Events_tb_tmp['Property'].str.contains(d)].reset_index(drop=True)
@@ -205,7 +209,8 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp):
     
     # Peak Room day
     if RoomN_tmp.empty is False:
-        Room_tb_tmp = RoomN_tmp[['Property', 'Room']]
+        #Room_tb_tmp = RoomN_tmp[['Property', 'Pattern Date' 'Room']]
+        Room_tb_tmp = RoomN_tmp.groupby(['Property', 'Pattern Date'])['Room'].sum().reset_index()
         # Loop for all property in property_et_list list
         for d in property_et_list.keys():
             Room_loop_tmp = Room_tb_tmp[Room_tb_tmp['Property'].str.contains(d)].reset_index(drop=True)
@@ -229,7 +234,9 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp):
     if Events_tb_tmp.shape[0] < 360:
         # Transfer event table to BR
         ws_Events.Range(ws_Events.Cells(24,2), ws_Events.Cells(24 + Events_tb_tmp.shape[0] - 1, 10)).Value = Events_tb_tmp.values
-
+    # Else send the event table as attachment in the reply notification email
+    #else:
+        
 
 # main function for business_review_sync
 def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
@@ -242,22 +249,27 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
     BR_file = glob.glob(BR_folder + 'BR Form_Macao_*.xlsm')
     wb = excel.Workbooks.Open(BR_file[0], None, True)
     
+    # room_type list
+    room_type_list = pd.read_csv(os.path.abspath(os.getcwd()) + '\\Documents\\room_type.csv', header=5)
+    # restaurant list
+    restaurant_info = pd.read_csv(os.path.abspath(os.getcwd()) + '\\Documents\\restaurant_info.csv')
+    
     # Run rooms info function
-    rooms_info(wb, BK_tmp, Event_tmp)
+    rooms_info(wb, BK_tmp, Event_tmp, restaurant_info)
     
     # Find Booking start day
     start_bk = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate'])
     # Run rooms rates info function
     if RoomN_tmp.empty is False:
-        rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc)
+        rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc, room_type_list)
     
     # Run meeting space info function
     if Event_tmp.empty is False:
-        meeting_space_info(wb, RoomN_tmp, Event_tmp)
-#    
+        meeting_space_info(wb, RoomN_tmp, Event_tmp, restaurant_info)
+ 
 #    # excel filename format
-    excelfile_name = 'BR_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsm'
-#    
+    excelfile_name = BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsm'
+ 
     # BR filename to save
     bk_year = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).year
     bk_month_number = str(pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).month)
@@ -274,7 +286,7 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
     excel.EnableEvents = False
     wb.Close(True)
 
-#    return BR_file_path
+    return BR_file_path
 
 #    save_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
 #    wb.SaveAs(save_path + excelfile_name)
