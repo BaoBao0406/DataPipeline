@@ -29,6 +29,8 @@ if os.path.exists(os.getcwd() + '\\tmp.csv'):
             BP_file_path = proforma_sync.proforma_sync(BK_tmp, RoomN_tmp, Event_tmp)
             # Save path to table
             bk_row['BP_file_path'] = BP_file_path
+        else:
+            bk_row['BP_file_path'] = 'Not Available'
             
         # BR main function
         run_BR = str(bk_row['Business Review']).lower()
@@ -39,6 +41,8 @@ if os.path.exists(os.getcwd() + '\\tmp.csv'):
             BR_file_path = business_review_sync.business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc)
             # Save path to table
             bk_row['BR_file_path'] = BR_file_path
+        else:
+            bk_row['BR_file_path'] = 'Not Available'
     
         # send email to reply with BR and BP path link
         outlook_trigger.reply_notification(bk_row)
