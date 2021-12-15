@@ -4,7 +4,7 @@
 
 import win32com.client as win32
 from win32com.client import Dispatch
-import datetime, os.path, re, io
+import datetime, os.path, re, io, os
 import pandas as pd
 
 
@@ -31,8 +31,6 @@ def extract_email_table(msg):
             table_tmp['sender'] = msg.Sender.GetExchangeUser().PrimarySmtpAddress
         else:
             table_tmp['sender'] = msg.SenderEmailAddress
-        
-        # TODO: Add function to debug
         
         return table_tmp
     
@@ -68,8 +66,6 @@ def process_save_email_2_csv(MsgToMove):
         else:
             table = pd.concat([table, table_tmp])
     table = table.reset_index().drop(['index'], axis=1)
-    # Change column header name
-    table.columns = ['Booking ID', 'Breakfast inclusive', 'Proforma', 'Business Review', 'Facility License Agreement', 'Booking and Room rate Prediction']
     # Export table to csv file for later process
     table.to_csv(os.path.abspath(os.getcwd()) + '\\tmp.csv')
 
@@ -96,7 +92,7 @@ def outlook_trigger():
 
 
 # Function to reply notification email with BR and BP path
-def reply_notification(bk_row):
+def reply_notification(bk_row, oversize_event_table):
     outlook = win32.Dispatch("Outlook.Application")
     mail = outlook.CreateItem(0)
     mail.To = bk_row['sender']
@@ -105,8 +101,17 @@ def reply_notification(bk_row):
     MessageBody = "<p>BP file path :&nbsp;<a href='" + str(bk_row['BP_file_path']) + "'>" + str(bk_row['BP_file_path']) + "</a></p><p>BR file path :&nbsp;<a href='" + str(bk_row['BR_file_path']) + "'>"  + str(bk_row['BR_file_path']) + "</a></p>"
     index = mail.HTMLbody.find('>', mail.HTMLbody.find('<body')) 
     mail.HTMLbody = mail.HTMLbody[:index + 1] + MessageBody + mail.HTMLbody[index + 1:]
-    mail.send
-    
+    # if event row above 260 rows will send event table as attachment in reply email as BR cannot paste more than 260 rows
+    if oversize_event_table:
+        mail.Attachments.Add(os.path.abspath(os.getcwd()) + '\\Documents\\event_table.xlsx')
+        mail.send
+        # remove tmp event table
+        os.remove(os.path.abspath(os.getcwd()) + '\\Documents\\event_table.xlsx')
+    else:
+        mail.send
+        
+
+# TODO: error notification email
 
 # Testing purpose
 #outlook_trigger()
