@@ -2,7 +2,7 @@
 # business_review_sync.py - 
 
 import pandas as pd
-import os.path, datetime
+import os.path, datetime, re
 import numpy as np
 from datetime import timedelta
 
@@ -12,10 +12,16 @@ import glob
 
 
 # Add up the restaurant revenue for Rooms Worksheet
-def event_rest_revenue(ws_Rooms, Event_tmp_rest, rest_et_list):
+def event_rest_revenue(ws_Rooms, Event_tmp_rest, restaurant_info, prop_name):
+    # Filter by property for restaurant_info csv file to get BR restaurant cell number
+    rest_et_list = restaurant_info[restaurant_info['property'] == prop_name][['restaurant_list', 'br_cell_number']].set_index('restaurant_list')
+    # Convert to dictionary format
+    rest_et_list = rest_et_list['br_cell_number'].to_dict()
+    # Run loop for rest_et_list to paste revenue into corresponding cell
     for rest in rest_et_list.keys():
         tmp = Event_tmp_rest[Event_tmp_rest['Function Space'].str.contains(rest)]
-        ws_Rooms.Range("B" + str(rest_et_list[rest])).Value = tmp['Total F&B Revenue'].sum()
+        if tmp.empty is False:
+            ws_Rooms.Range("B" + str(rest_et_list[rest])).Value = tmp['Total F&B Revenue'].sum()
 
 
 # Transfer data to excel Rooms Worksheet
@@ -83,21 +89,12 @@ def rooms_info(wb, BK_tmp, Event_tmp, restaurant_info):
         Event_tmp_rest['Event Classification'].replace(np.nan, 'Empty', inplace=True)
         Event_tmp_rest = Event_tmp_rest[~Event_tmp_rest['Event Classification'].str.contains('Package|Breakfast')]
         
-        # Venetian restaurant list and excel cell
-        venetian_rest = restaurant_info[restaurant_info['property'] == 'VMRH'][['restaurant_list', 'br_cell_number']].set_index('restaurant_list')
-        venetian_rest = venetian_rest['br_cell_number'].to_dict()
         # Run function for Venetian rest revenue
-        event_rest_revenue(ws_Rooms, Event_tmp_rest, venetian_rest)
-        # Conrad restaurant list and excel cell
-        conrad_rest = restaurant_info[restaurant_info['property'] == 'CMCC'][['restaurant_list', 'br_cell_number']].set_index('restaurant_list')
-        conrad_rest = conrad_rest['br_cell_number'].to_dict()
+        event_rest_revenue(ws_Rooms, Event_tmp_rest, restaurant_info, 'VMRH')
         # Run function for Conrad rest revenue
-        event_rest_revenue(ws_Rooms, Event_tmp_rest, conrad_rest)
-        # Conrad restaurant list and excel cell
-        parisian_rest = restaurant_info[restaurant_info['property'] == 'PARIS'][['restaurant_list', 'br_cell_number']].set_index('restaurant_list')
-        parisian_rest = parisian_rest['br_cell_number'].to_dict()
+        event_rest_revenue(ws_Rooms, Event_tmp_rest, restaurant_info, 'CMCC')
         # Run function for Parisian rest revenue
-        event_rest_revenue(ws_Rooms, Event_tmp_rest, parisian_rest)
+        event_rest_revenue(ws_Rooms, Event_tmp_rest, restaurant_info, 'PARIS')
 
 
 # Room and Rates part
@@ -182,7 +179,7 @@ def rooms_rates_info(wb, RoomN_tmp, start_bk, bbf_inc, room_type_list):
         
     
 # Transfer data to excel Meeting Space Worksheet
-def meeting_space_info(wb, RoomN_tmp, Event_tmp, restaurant_info):
+def meeting_space_info(wb, RoomN_tmp, Event_tmp, restaurant_info, oversize_event_table):
     # Meeting Space Worksheet
     ws_Events = wb.Worksheets('Meeting Space')
     
@@ -235,12 +232,15 @@ def meeting_space_info(wb, RoomN_tmp, Event_tmp, restaurant_info):
         # Transfer event table to BR
         ws_Events.Range(ws_Events.Cells(24,2), ws_Events.Cells(24 + Events_tb_tmp.shape[0] - 1, 10)).Value = Events_tb_tmp.values
     # Else send the event table as attachment in the reply notification email
-    #else:
+    else:
+        Events_tb_tmp.to_excel(os.path.abspath(os.getcwd()) + '\\Documents\\event_table.xlsx')
+        oversize_event_table = True
         
+    return oversize_event_table
 
 # main function for business_review_sync
-def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
-    
+def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc, oversize_event_table):
+        
     excel = win32.DispatchEx("Excel.Application")
     
     # BR folder location
@@ -265,10 +265,11 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
     
     # Run meeting space info function
     if Event_tmp.empty is False:
-        meeting_space_info(wb, RoomN_tmp, Event_tmp, restaurant_info)
+        oversize_event_table = meeting_space_info(wb, RoomN_tmp, Event_tmp, restaurant_info, oversize_event_table)
  
-#    # excel filename format
-    excelfile_name = BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsm'
+    # excel filename format
+    post_as_name = re.sub('[^a-zA-Z0-9 \n\.]', '', BK_tmp.iloc[0]['Name'])
+    excelfile_name = BK_tmp.iloc[0]['ArrivalDate'] + '_' + post_as_name + '.xlsm'
  
     # BR filename to save
     bk_year = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).year
@@ -286,7 +287,7 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc):
     excel.EnableEvents = False
     wb.Close(True)
 
-    return BR_file_path
+    return BR_file_path, oversize_event_table
 
 #    save_path = 'I:\\10-Sales\\+Dept Admin (3Y, Internal)\\2021\\Personal Folders\\Patrick Leong\\Python Code\\DataPipeline\\Testing files\\'
 #    wb.SaveAs(save_path + excelfile_name)
