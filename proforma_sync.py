@@ -6,7 +6,7 @@ from win32com.client import constants
 from datetime import timedelta
 import numpy as np
 import pandas as pd
-import os.path
+import os.path, re
 import glob, datetime
 
 
@@ -228,7 +228,8 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
         Entertainment_and_CE_info(wb, Event_tmp)
 
     # excel filename format
-    excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + BK_tmp.iloc[0]['Name'] + '.xlsx'
+    post_as_name = re.sub('[^a-zA-Z0-9 \n\.]', '', BK_tmp.iloc[0]['Name'])
+    excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + post_as_name + '.xlsx'
     
     # BP saving path
     bk_year = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).year
