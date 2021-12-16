@@ -17,11 +17,13 @@ def save_email(msg):
     # replace all the special character in email Subject
     msg_filename = re.sub('[^a-zA-Z0-9 \n\.]', '', msg.Subject) + '.msg'
     # Save the email to folder
-    msg.SaveAs(os.path.abspath(os.getcwd()) + '\\Email\\' + msg_filename)
+    msg_path = os.path.abspath(os.getcwd()) + '\\Email\\' + msg_filename
+    msg.SaveAs(msg_path)
 
+    return msg_path
 
 # Function to get email body information in table
-def extract_email_table(msg):
+def extract_email_table(msg, msg_path):
         # Using read_html to get email table, then use table[0] to convert to DataFrame format
         table_tmp = pd.read_html(msg.HTMLBody, header=0, index_col=0)[0].T
         # Convert to csv to remove the index column then convert back to DatdFrame
@@ -31,6 +33,8 @@ def extract_email_table(msg):
             table_tmp['sender'] = msg.Sender.GetExchangeUser().PrimarySmtpAddress
         else:
             table_tmp['sender'] = msg.SenderEmailAddress
+        # Add msg path for process email
+        table_tmp['msg_path'] = msg_path
         
         return table_tmp
     
@@ -56,9 +60,9 @@ def process_save_email_2_csv(MsgToMove):
     table = pd.DataFrame()
     for msg in MsgToMove:
         # run function "save_email"
-        save_email(msg)
+        msg_path = save_email(msg)
         # run function "extract_email_table"
-        table_tmp = extract_email_table(msg)
+        table_tmp = extract_email_table(msg, msg_path)
         
         # Check if table is empty, if not merge old to new table
         if table.empty:
