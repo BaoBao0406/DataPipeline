@@ -24,19 +24,19 @@ def save_email(msg):
 
 # Function to get email body information in table
 def extract_email_table(msg, msg_path):
-        # Using read_html to get email table, then use table[0] to convert to DataFrame format
-        table_tmp = pd.read_html(msg.HTMLBody, header=0, index_col=0)[0].T
-        # Convert to csv to remove the index column then convert back to DatdFrame
-        table_tmp = pd.read_csv(io.StringIO(table_tmp.to_csv(index=False)), sep=",")
-        # Add sender email to table for reply email send
-        if msg.SenderEmailType=='EX':
-            table_tmp['sender'] = msg.Sender.GetExchangeUser().PrimarySmtpAddress
-        else:
-            table_tmp['sender'] = msg.SenderEmailAddress
-        # Add msg path for process email
-        table_tmp['msg_path'] = msg_path
-        
-        return table_tmp
+    # Using read_html to get email table, then use table[0] to convert to DataFrame format
+    table_tmp = pd.read_html(msg.HTMLBody, header=0, index_col=0)[0].T
+    # Convert to csv to remove the index column then convert back to DatdFrame
+    table_tmp = pd.read_csv(io.StringIO(table_tmp.to_csv(index=False)), sep=",")
+    # Add sender email to table for reply email send
+    if msg.SenderEmailType=='EX':
+        table_tmp['sender'] = msg.Sender.GetExchangeUser().PrimarySmtpAddress
+    else:
+        table_tmp['sender'] = msg.SenderEmailAddress
+    # Add msg path for process email
+    table_tmp['msg_path'] = msg_path
+    
+    return table_tmp
     
     
 # Loop for all email within the Date Range with the keyword
@@ -115,7 +115,19 @@ def reply_notification(bk_row, oversize_event_table):
         mail.send
         
 
-# TODO: error notification email
+# Function to send out error notification email
+def error_notification(bk_row, log_file):
+    outlook = win32.Dispatch("Outlook.Application")
+    mail = outlook.CreateItem(0)
+    mail.To = bk_row['sender']
+    mail.CC = list(['patrick.leong@sands.com.mo', 'joyce.ieong@sands.com.mo', 'tony.ho.lucas@sands.com.mo'])
+    mail.Subject = 'Error Notification for Booking ID :' + str(bk_row['Booking ID']) + ' in Booking Dataflow'
+    mail.GetInspector
+    MessageBody = "<p>Noted that an error occurs in your Booking, and due to this error Profoma and Business Review cannot be created.</p> <p>Please double check the below information in your Booking.&nbsp;</p> <p>- Do you enter the correct Booking ID in Booking Dataflow email?</p> <p>- Do you input roomnight and room rate in your Room Block?</p> <p>- Do you enter all necessary information in the Booking?</p> <p><br></p> <p>Systems Team,</p> <p>Access the below link for Error log for this Booking:</p> <a href='" + log_file + "'>Error Log</a></p>"
+    index = mail.HTMLbody.find('>', mail.HTMLbody.find('<body')) 
+    mail.HTMLbody = mail.HTMLbody[:index + 1] + MessageBody + mail.HTMLbody[index + 1:]
+    mail.send
+
 
 # Testing purpose
 #outlook_trigger()
