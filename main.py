@@ -6,8 +6,10 @@ import datetime, os.path, os, logging
 import outlook_trigger, extract_sqlserver_data, proforma_sync, business_review_sync
 
 # logging error into file
-log_file = os.path.abspath(os.getcwd()) + '\\error.log'
-logging.basicConfig(level=logging.ERROR, filename=log_file, filename='w')    
+log_file = os.path.abspath(os.getcwd()) + '\\error_log.log'
+FORMAT = '%(asctime)s %(levelname)s: %(message)s'
+logging.basicConfig(level=logging.ERROR, filename=log_file, filemode='w', format=FORMAT)    
+
 
 # Run outlook_trigger function
 outlook_trigger.outlook_trigger()
@@ -56,12 +58,12 @@ if os.path.exists(os.getcwd() + '\\tmp.csv'):
             outlook_trigger.reply_notification(bk_row, oversize_event_table)
         
         except Exception as e:
-            # Remove msg file if error occurs
-            os.remove(str(bk_row['msg_path']))
             # log the error to log file
             logging.exception('Booking ID: ' + str(bk_row['Booking ID']))
-            # TODO: function to send notification for failing to run
-            
+            # Remove msg file if error occurs
+            os.remove(str(bk_row['msg_path']))
+            # function to send notification for failing to run
+            outlook_trigger.error_notification(bk_row, log_file)
             pass
             
     # remove tmp file
