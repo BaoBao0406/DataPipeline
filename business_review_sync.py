@@ -267,9 +267,6 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc, oversize_event_t
     if Event_tmp.empty is False:
         oversize_event_table = meeting_space_info(wb, RoomN_tmp, Event_tmp, restaurant_info, oversize_event_table)
  
-    # excel filename format
-    post_as_name = re.sub('[^a-zA-Z0-9 \n\.]', '', BK_tmp.iloc[0]['Name'])
-    excelfile_name = BK_tmp.iloc[0]['ArrivalDate'] + '_' + post_as_name + '.xlsm'
  
     # BR filename to save
     bk_year = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).year
@@ -277,9 +274,21 @@ def business_review_sync(BK_tmp, RoomN_tmp, Event_tmp, bbf_inc, oversize_event_t
     bk_month_name = datetime.datetime.strptime(bk_month_number, "%m")
     bk_month = bk_month_number + '-' + bk_month_name.strftime("%b")
     BR_save_file = BR_folder + str(bk_year) + '\\' + bk_month
+    
+    # excel filename format
+    post_as_name = re.sub('[^a-zA-Z0-9 \n\.]', '', BK_tmp.iloc[0]['Name'])
+    excelfile_name = BK_tmp.iloc[0]['ArrivalDate'] + '_' + post_as_name + '.xlsm'
+    
     # if folder not exists create folder
     if not os.path.exists(BR_save_file):
         os.makedirs(BR_save_file)
+    # if filename exists, then rename file
+    if os.path.exists(BR_save_file + '\\' + excelfile_name):
+        excelfile_name = 'Copy - ' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + post_as_name + '.xlsm'
+        # if copy of the filename exist, delete the copy file
+        if os.path.exists(BR_save_file + '\\' + excelfile_name):
+            os.remove(BR_save_file + '\\' + excelfile_name)
+    
     # Save as excel in BR saving path
     BR_file_path = BR_save_file + '\\' + excelfile_name
     wb.SaveAs(BR_file_path)
