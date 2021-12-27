@@ -123,45 +123,58 @@ def Room_info(wb, start_day, BK_tmp, RoomN_tmp):
         ws_Room.Range("E47").Value = 0
 
 # Transfer data to excel BQT Worksheet
-def Meal_info(wb, start_day, BK_tmp, Event_tmp):
+def Meal_info(wb, start_day, BK_tmp, Event_tmp, restaurant_info):
+    
+    # Get outlet restaurant name from list
+    restaurant_list = restaurant_info['restaurant_list'].tolist()
+    # replace blank value in Event Classification
+    Event_tmp['Event Classification'].replace(np.nan, 'Empty', inplace=True)
+    # exclude all package event
+    Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
+    
+    
     # Select BQT Worksheet
     ws_BQT = wb.Worksheets('B. BQT')
     
     # F&B minimum
-    ws_BQT.Range("B7").Value = BK_tmp.iloc[0]['nihrm__FoodBeverageMinimum__c']
+    # include only outlet restaurant event
+    Events_outlet_tmp = Event_wo_package[Event_wo_package['Event Classification'].isin(restaurant_list)]
+    if Events_outlet_tmp.empty is False:
+        Events_outlet_tmp['Total Outlet Revenue'] = Events_outlet_tmp['Food Revenue'] + Events_outlet_tmp['Outlet Revenue'] + Events_outlet_tmp['Beverage Revenue']
+        ws_BQT.Range("B7").Value = Events_outlet_tmp['Total Outlet Revenue'].sum()
     # TODO: Rebate
     
     
     # Select BQT Meal Worksheet
     ws_BQT_meal = wb.Worksheets('B1. BQT Meal')
-    # replace blank value in Event Classification
-    Event_tmp['Event Classification'].replace(np.nan, 'Empty', inplace=True)
-    # exclude all package event
-    Event_wo_package = Event_tmp[~Event_tmp['Event Classification'].str.contains('Package')]
-    # Combine Food Revenue and Outlet Revenue
-    Event_wo_package['Total Revenue'] = Event_wo_package['Food Revenue'] + Event_wo_package['Outlet Revenue']
-    # exclude all event with zero Total Revenue
-    Event_wo_package = Event_wo_package[Event_wo_package['Total Revenue'] != 0.0]
-    # Breakfast table
-    breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
-    if breakfast.empty is False:
-        breakfast = BQT_meal_table(breakfast, start_day)
-        ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1] - 1)).Value = breakfast.values
-    # Lunch table
-    lunch = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Lunch')]
-    if lunch.empty is False:
-        lunch = BQT_meal_table(lunch, start_day)
-        ws_BQT_meal.Range(ws_BQT_meal.Cells(22,2), ws_BQT_meal.Cells(23, 2 + lunch.shape[1] - 1)).Value = lunch.values
-    # Dinner table
-    dinner = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Dinner')]
-    if dinner.empty is False:
-        dinner = BQT_meal_table(dinner, start_day)
-        ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1] - 1)).Value = dinner.values
-    # Beverage table
-    beverage = Event_wo_package[Event_wo_package['Beverage Revenue'] != 0]
-    if beverage.empty is False:
-        beverage = BQT_beverage_table(beverage, start_day)
-        ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + beverage.shape[1] - 1)).Value = beverage.values
+    
+    # exclude outlet restaurant event
+    Event_wo_package = Event_wo_package[~Event_wo_package['Event Classification'].isin(restaurant_list)]
+    if Event_wo_package.empty is False:
+        # Combine Food Revenue and Outlet Revenue
+        Event_wo_package['Total Revenue'] = Event_wo_package['Food Revenue'] + Event_wo_package['Outlet Revenue']
+        # exclude all event with zero Total Revenue
+        Event_wo_package = Event_wo_package[Event_wo_package['Total Revenue'] != 0.0]
+        # Breakfast table
+        breakfast = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Breakfast')]
+        if breakfast.empty is False:
+            breakfast = BQT_meal_table(breakfast, start_day)
+            ws_BQT_meal.Range(ws_BQT_meal.Cells(7,2), ws_BQT_meal.Cells(8, 2 + breakfast.shape[1] - 1)).Value = breakfast.values
+        # Lunch table
+        lunch = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Lunch')]
+        if lunch.empty is False:
+            lunch = BQT_meal_table(lunch, start_day)
+            ws_BQT_meal.Range(ws_BQT_meal.Cells(22,2), ws_BQT_meal.Cells(23, 2 + lunch.shape[1] - 1)).Value = lunch.values
+        # Dinner table
+        dinner = Event_wo_package[Event_wo_package['Event Classification'].str.contains('Dinner')]
+        if dinner.empty is False:
+            dinner = BQT_meal_table(dinner, start_day)
+            ws_BQT_meal.Range(ws_BQT_meal.Cells(37,2), ws_BQT_meal.Cells(38, 2 + dinner.shape[1] - 1)).Value = dinner.values
+        # Beverage table
+        beverage = Event_wo_package[Event_wo_package['Beverage Revenue'] != 0]
+        if beverage.empty is False:
+            beverage = BQT_beverage_table(beverage, start_day)
+            ws_BQT_meal.Range(ws_BQT_meal.Cells(51,2), ws_BQT_meal.Cells(52, 2 + beverage.shape[1] - 1)).Value = beverage.values
 
 
 # Transfer data to excel Entertainment and C&E Worksheet
@@ -222,14 +235,13 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
         Room_info(wb, start_day, BK_tmp, RoomN_tmp)
     # Run Meal_info and Entertainment_and_CE_info function
     if Event_tmp.empty is False:
+        # restaurant list
+        restaurant_info = pd.read_csv(os.path.abspath(os.getcwd()) + '\\Documents\\restaurant_info.csv')
         # Run Meal_info function
-        Meal_info(wb, start_day, BK_tmp, Event_tmp)
+        Meal_info(wb, start_day, BK_tmp, Event_tmp, restaurant_info)
         # Run Entertainment_and_CE_info function
         Entertainment_and_CE_info(wb, Event_tmp)
 
-    # excel filename format
-    post_as_name = re.sub('[^a-zA-Z0-9 \n\.]', '', BK_tmp.iloc[0]['Name'])
-    excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + post_as_name + '.xlsx'
     
     # BP saving path
     bk_year = pd.to_datetime(BK_tmp.iloc[0]['ArrivalDate']).year
@@ -238,11 +250,23 @@ def proforma_sync(BK_tmp, RoomN_tmp, Event_tmp):
     bk_month_name = datetime.datetime.strptime(bk_month_number, "%m")
     bk_month = bk_month_number + '_' + bk_month_name.strftime("%b")
     BP_save_file = BP_folder + str(bk_year) + '\\Proforma P&L\\' + bk_month
+    
+    # excel filename format
+    post_as_name = re.sub('[^a-zA-Z0-9 \n\.]', '', BK_tmp.iloc[0]['Name'])
+    excelfile_name = 'BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + post_as_name + '.xlsx'
+    
     # if folder not exists create folder
     if not os.path.exists(BP_save_file):
         os.makedirs(BP_save_file)
+    # if filename exists, then rename file
+    if os.path.exists(BP_save_file + '\\' + excelfile_name):
+        excelfile_name = 'Copy - BP_' + BK_tmp.iloc[0]['ArrivalDate'] + '_' + post_as_name + '.xlsx'
+        # if copy of the filename exist, delete the copy file
+        if os.path.exists(BP_save_file + '\\' + excelfile_name):
+            os.remove(BP_save_file + '\\' + excelfile_name)
+    
     # Save as excel in BP saving path
-    BP_file_path = BP_save_file + '\\' + excelfile_name
+    BP_file_path = BP_save_file + '\\' + excelfile_name        
     wb.SaveAs(BP_file_path)
     wb.Close(True)
     
